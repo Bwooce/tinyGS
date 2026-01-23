@@ -171,10 +171,10 @@ float Power::getBatteryVoltage() {
         I2Cread(AXP192_SLAVE_ADDRESS, 0x78, 2, buf);
         voltage = ((buf[0] << 4) | (buf[1] & 0x0F)) * 1.1;
     } else if (AXPchip == 2) { // AXP2101
-        uint8_t buf[2];
+        uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATTERY_VOLT_H, sizeof(buf), buf);
-        // Log::debug(PSTR("AXP2101 Raw Batt: 0x%02X 0x%02X"), buf[0], buf[1]);
-        voltage = (buf[0] << 8) | buf[1]; 
+        // AXP2101: [13:6] in reg 0x34, [5:0] in reg 0x35
+        voltage = ((buf[0] << 6) | (buf[1] & 0x3F)); 
     }
     return voltage;
 }
@@ -185,13 +185,15 @@ float Power::getVbusVoltage() {
     
     float voltage = 0;
     if (AXPchip == 1) { // AXP192
-        uint8_t buf[2];
+        uint8_t buf[2] = {0, 0};
         I2Cread(AXP192_SLAVE_ADDRESS, 0x56, 2, buf); // VBUS voltage register for AXP192
         voltage = ((buf[0] << 4) | (buf[1] & 0x0F)) * 1.7;
     } else if (AXPchip == 2) { // AXP2101
-        uint8_t buf[2];
+        uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_VOLT_H, 2, buf);
-        voltage = (buf[0] << 8) | buf[1]; 
+        // AXP2101 VBUS: [13:5] in 0x38, [4:0] in 0x39? 
+        // Datasheet: 0x38 VBUS_Val[13:6], 0x39 VBUS_Val[5:0]
+        voltage = ((buf[0] << 6) | (buf[1] & 0x3F));
     }
     return voltage;
 }
