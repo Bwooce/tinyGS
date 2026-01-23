@@ -243,6 +243,12 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>WiFi RSSI </td><td>" + String(WiFi.isConnected() ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + "</td></tr>";
   s += "<tr><td>Radio </td><td>" + String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + "</td></tr>";
   
+  if (GnssManager::getInstance().hasFix()) {
+      s += "<tr><td>GNSS </td><td><span class='G'>FIX (" + String(GnssManager::getInstance().getSatellites()) + " sats)</span></td></tr>";
+  } else {
+      s += "<tr><td>GNSS </td><td><span class='R'>NO FIX (" + String(GnssManager::getInstance().getSatellites()) + " sats)</span></td></tr>";
+  }
+
   float battVol = Power::getInstance().getBatteryVoltage();
   int battPct = Power::getInstance().getBatteryPercentage();
   if (battVol > 0) { 

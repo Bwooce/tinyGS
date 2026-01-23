@@ -1184,6 +1184,13 @@ void MQTT_Client::begin()
 
 
 int MQTT_Client::voltage() {
+  // Try to get voltage from Power manager (AXP192/AXP2101)
+  float pmuVoltage = Power::getInstance().getBatteryVoltage();
+  if (pmuVoltage > 0) {
+      return (int)pmuVoltage;
+  }
+
+  // Fallback for boards without PMU (Heltec V1/V2 etc uses GPIO 36)
   int medianVoltage;
   int length = 21;
   int voltages[22];
