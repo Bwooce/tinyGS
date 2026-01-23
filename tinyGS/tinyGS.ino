@@ -563,7 +563,7 @@ void handleRawSerial()
       }
       case 's': {
           Log::console(PSTR("Station Name: %s"), configManager.getThingName());
-          Log::console(PSTR("Lat/Lon: %.4f, %.4f"), configManager.getLatitude(), configManager.getLongitude());
+          Log::console(PSTR("Lat/Lon: %.3f, %.3f"), configManager.getLatitude(), configManager.getLongitude());
           Log::console(PSTR("MQTT Server: %s"), configManager.getMqttServer());
           Log::console(PSTR("MQTT User: %s"), configManager.getMqttUser());
           Log::console(PSTR("MQTT Pass: %s"), strlen(configManager.getMqttPass()) > 0 ? "SET" : "EMPTY");

@@ -173,8 +173,8 @@ float Power::getBatteryVoltage() {
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATTERY_VOLT_H, sizeof(buf), buf);
-        // AXP2101: [13:6] in reg 0x34, [5:0] in reg 0x35
-        voltage = ((buf[0] << AXP2101_BATT_VOLT_SHIFT) | (buf[1] & AXP2101_BATT_VOLT_MASK)); 
+        // AXP2101: 1mV/bit
+        voltage = (buf[0] << AXP2101_BATT_VOLT_SHIFT) | (buf[1] & AXP2101_BATT_VOLT_MASK); 
     } else {
         // Fallback for boards without PMU (Heltec V1/V2 etc uses GPIO 36)
         int length = 21;
@@ -215,8 +215,8 @@ float Power::getVbusVoltage() {
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_VOLT_H, 2, buf);
-        // AXP2101 VBUS: [13:6] in 0x38, [5:0] in 0x39
-        voltage = ((buf[0] << AXP2101_VBUS_VOLT_SHIFT) | (buf[1] & AXP2101_VBUS_VOLT_MASK));
+        // AXP2101 VBUS: 1mV/bit
+        voltage = (buf[0] << AXP2101_VBUS_VOLT_SHIFT) | (buf[1] & AXP2101_VBUS_VOLT_MASK);
     }
     return voltage;
 }

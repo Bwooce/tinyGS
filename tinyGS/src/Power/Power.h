@@ -44,20 +44,6 @@
 #define XPOWERS_AXP202_IC_TYPE  (0x03)
 #define XPOWERS_AXP202_CHIP_ID  (0x41)
 
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-// * * * * * * * A X P   C H I P   R E A D I N G * * * * * * * * *
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-#define XPOWERS_AXP2101_ADC_DATA_RELUST0                 (0x34)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST1                 (0x35)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST2                 (0x36)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST3                 (0x37)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST4                 (0x38)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST5                 (0x39)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST6                 (0x3A)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST7                 (0x3B)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST8                 (0x3C)
-#define XPOWERS_AXP2101_ADC_DATA_RELUST9                 (0x3D)
-
 // AXP2101 Registers and Bits
 #define AXP2101_LDO_ONOFF_CTRL0     0x90
 #define AXP2101_ALDO1_BIT           0
@@ -70,10 +56,10 @@
 #define AXP2101_VBUS_VOLT_L         0x39
 #define AXP2101_FUEL_GAUGE          0xA4
 
-#define AXP2101_BATT_VOLT_MASK      0x3F
-#define AXP2101_BATT_VOLT_SHIFT     6
-#define AXP2101_VBUS_VOLT_MASK      0x3F
-#define AXP2101_VBUS_VOLT_SHIFT     6
+#define AXP2101_BATT_VOLT_MASK      0xFF
+#define AXP2101_BATT_VOLT_SHIFT     8
+#define AXP2101_VBUS_VOLT_MASK      0xFF
+#define AXP2101_VBUS_VOLT_SHIFT     8
 
 extern Status status;
 

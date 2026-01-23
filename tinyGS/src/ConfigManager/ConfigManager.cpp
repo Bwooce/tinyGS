@@ -245,9 +245,9 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>Radio </td><td>" + String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + "</td></tr>";
   
   if (GnssManager::getInstance().hasFix()) {
-      s += "<tr><td>GNSS </td><td><span class='G'>FIX (" + String(GnssManager::getInstance().getSatellites()) + " sats)</span></td></tr>";
+      s += "<tr><td>GNSS </td><td><span class='G'>FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span></td></tr>";
   } else {
-      s += "<tr><td>GNSS </td><td><span class='R'>NO FIX (" + String(GnssManager::getInstance().getSatellites()) + " sats)</span></td></tr>";
+      s += "<tr><td>GNSS </td><td><span class='R'>NO FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span></td></tr>";
   }
 
   float battVol = Power::getInstance().getBatteryVoltage();
@@ -256,7 +256,6 @@ void ConfigManager::handleDashboard()
       s += "<tr><td>Battery </td><td>" + String(battVol/1000.0, 2) + "V (" + String(battPct) + "%)</td></tr>";
   }
   
-  s += "<tr><td>Noise floor </td><td>" + String(status.modeminfo.currentRssi) + "</td></tr>"; 
   s += F("</table></div>");
 
 
@@ -264,6 +263,7 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>Modulation </td><td>" + String(status.modeminfo.modem_mode) + "</td></tr>";
   s += "<tr><td>Frequency </td><td>" + String(status.modeminfo.frequency) + "</td></tr>";
   s += "<tr><td>Freq. Offset </td><td>" + String(status.modeminfo.freqOffset) + "</td></tr>";
+  s += "<tr><td>Noise floor </td><td>" + String(status.modeminfo.currentRssi) + "</td></tr>";
 
   if (strcmp(status.modeminfo.modem_mode, "LoRa") == 0)
   {
@@ -465,6 +465,13 @@ void ConfigManager::handleRefreshWorldmap()
   // modem configuration (for modemconfig id table data)
   data_string += String(status.modeminfo.modem_mode) + "," +
                  String(status.modeminfo.frequency) + "," + String(status.modeminfo.freqOffset) + ",";
+                 
+  // Noise floor (moved to modem config)
+  Radio& radio = Radio::getInstance ();
+  if (status.radio_ready)
+    radio.currentRssi ();
+  data_string += String(status.modeminfo.currentRssi) + ",";
+
   if (strcmp(status.modeminfo.modem_mode, "LoRa") == 0)
   {
     data_string += String(status.modeminfo.sf) + ",";
@@ -492,10 +499,24 @@ void ConfigManager::handleRefreshWorldmap()
     data_string += String("<span class='R'>NOT CONNECTED</span>") + ",";
   }
   data_string += String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + ",";
-  Radio& radio = Radio::getInstance ();
-  if (status.radio_ready)
-    radio.currentRssi ();
-  data_string += String(status.modeminfo.currentRssi) + ",";
+  
+  // GNSS Status
+  if (GnssManager::getInstance().hasFix()) {
+      data_string += "<span class='G'>FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span>,";
+  } else {
+      data_string += "<span class='R'>NO FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span>,";
+  }
+
+  // Battery Status
+  float battVol = Power::getInstance().getBatteryVoltage();
+  int battPct = Power::getInstance().getBatteryPercentage();
+  if (battVol > 0) { 
+      data_string += String(battVol/1000.0, 2) + "V (" + String(battPct) + "%),";
+  } else {
+      data_string += ",";
+  }
+  
+  // Old location of currentRssi was here - REMOVED
 
  
    // sat_info

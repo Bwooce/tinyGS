@@ -67,8 +67,8 @@ void GnssManager::loop() {
                 // Update ConfigManager if currently empty or at 0,0 (manual override protection)
                 if (ConfigManager::getInstance().getLatitude() == 0.0 && ConfigManager::getInstance().getLongitude() == 0.0) {
                     char latBuf[16], lonBuf[16];
-                    snprintf(latBuf, sizeof(latBuf), "%.4f", getLatitude());
-                    snprintf(lonBuf, sizeof(lonBuf), "%.4f", getLongitude());
+                    snprintf(latBuf, sizeof(latBuf), "%.3f", getLatitude());
+                    snprintf(lonBuf, sizeof(lonBuf), "%.3f", getLongitude());
                     ConfigManager::getInstance().setLat(latBuf);
                     ConfigManager::getInstance().setLon(lonBuf);
                     Log::console(PSTR("GNSS: Updated station location to current fix."));
