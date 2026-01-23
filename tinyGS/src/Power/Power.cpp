@@ -31,47 +31,58 @@ byte irqstat0;
 byte irqstat1;
 byte irqstat2;
 
+Power::Power() : pmuWire(&Wire) {}
 
 void Power::I2CwriteByte(uint8_t Address, uint8_t Register, uint8_t Data)
 {
-  Wire.beginTransmission(Address);
-  Wire.write(Register);
-  Wire.write(Data);
-  Wire.endTransmission();
+  pmuWire->beginTransmission(Address);
+  pmuWire->write(Register);
+  pmuWire->write(Data);
+  pmuWire->endTransmission();
 }
 
 uint8_t Power::I2CreadByte(uint8_t Address, uint8_t Register)
 {
   uint8_t Nbytes = 1;
-  Wire.beginTransmission(Address);
-  Wire.write(Register);
-  Wire.endTransmission();
-  Wire.requestFrom(Address, Nbytes);
-  byte slaveByte = Wire.read();
-  Wire.endTransmission();
+  pmuWire->beginTransmission(Address);
+  pmuWire->write(Register);
+  pmuWire->endTransmission();
+  pmuWire->requestFrom(Address, Nbytes);
+  byte slaveByte = pmuWire->read();
+  pmuWire->endTransmission();
   return slaveByte;
 }
 
 void Power::I2Cread(uint8_t Address, uint8_t Register, uint8_t Nbytes, uint8_t* Data)
 {
-  Wire.beginTransmission(Address);
-  Wire.write(Register);
-  Wire.endTransmission();
-  Wire.requestFrom(Address, Nbytes);
+  pmuWire->beginTransmission(Address);
+  pmuWire->write(Register);
+  pmuWire->endTransmission();
+  pmuWire->requestFrom(Address, Nbytes);
   uint8_t index = 0;
-  while (Wire.available())
-    Data[index++] = Wire.read();
+  while (pmuWire->available())
+    Data[index++] = pmuWire->read();
 }
 
 
 void Power::checkAXP() 
 { 
    board_t board;
+   uint8_t boardIdx = ConfigManager::getInstance().getBoard();
    if (!ConfigManager::getInstance().getBoardConfig(board))
     return;
   Log::console(PSTR("AXPxxx chip?"));   
   byte regV = 0;
-  Wire.begin(board.OLED__SDA, board.OLED__SCL);                     // I2C_SDA, I2C_SCL on all new boards
+  
+  if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
+      Log::console(PSTR("PMU: Using Supreme Wire1 on pins %d/%d"), SUPREME_PMU_SDA, SUPREME_PMU_SCL);
+      Wire1.begin(SUPREME_PMU_SDA, SUPREME_PMU_SCL);
+      pmuWire = &Wire1;
+  } else {
+      Wire.begin(board.OLED__SDA, board.OLED__SCL);                     // I2C_SDA, I2C_SCL on all new boards
+      pmuWire = &Wire;
+  }
+  
   byte ChipID = I2CreadByte(0x34, 0x03);                            // read byte from xxx_IC_TYPE register
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
   if (ChipID == XPOWERS_AXP192_CHIP_ID) { // 0x03
@@ -97,17 +108,37 @@ void Power::checkAXP()
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
   if (ChipID == XPOWERS_AXP2101_CHIP_ID) {// 0x4A
     AXPchip = 2;
-    Log::console(PSTR("AXP2101 found"));  // T-Beam V1.2 with AXP2101 power controller
-    I2CwriteByte(0x34, 0x93, 0x1C);       // set ALDO2 voltage to 3.3V ( LoRa VCC )
-    I2CwriteByte(0x34, 0x94, 0x1C);       // set ALDO3 voltage to 3.3V ( GPS VDD )
-    I2CwriteByte(0x34, 0x6A, 0x04);       // set Button battery voltage to 3.0V ( backup battery )
-    I2CwriteByte(0x34, 0x64, 0x03);       // set Main battery voltage to 4.2V ( 18650 battery )
-    I2CwriteByte(0x34, 0x61, 0x05);       // set Main battery precharge current to 125mA
-    I2CwriteByte(0x34, 0x62, 0x0A);       // set Main battery charger current to 400mA ( 0x08-200mA, 0x09-300mA, 0x0A-400mA )
-    I2CwriteByte(0x34, 0x63, 0x15);       // set Main battery term charge current to 125mA
-    regV = I2CreadByte(0x34, 0x90);       // XPOWERS_AXP2101_LDO_ONOFF_CTRL0
-    regV = regV | 0x06;                   // set bit 1 (ALDO2) and bit 2 (ALDO3)
-    I2CwriteByte(0x34, 0x90, regV);       // and power channels now enabled
+    Log::console(PSTR("AXP2101 found"));  // T-Beam V1.2 or Supreme with AXP2101 power controller
+    
+    if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
+      // T-Beam Supreme
+      Log::console(PSTR("Configuring for T-Beam Supreme"));
+      I2CwriteByte(0x34, 0x92, 0x1C);       // set ALDO1 voltage to 3.3V ( Display )
+      I2CwriteByte(0x34, 0x94, 0x1C);       // set ALDO3 voltage to 3.3V ( Radio )
+      I2CwriteByte(0x34, 0x95, 0x1C);       // set ALDO4 voltage to 3.3V ( GPS )
+      I2CwriteByte(0x34, 0x6A, 0x04);       // set Button battery voltage to 3.0V ( backup battery )
+      I2CwriteByte(0x34, 0x64, 0x03);       // set Main battery voltage to 4.2V ( 18650 battery )
+      I2CwriteByte(0x34, 0x61, 0x05);       // set Main battery precharge current to 125mA
+      I2CwriteByte(0x34, 0x62, 0x0A);       // set Main battery charger current to 400mA
+      I2CwriteByte(0x34, 0x63, 0x15);       // set Main battery term charge current to 125mA
+      
+      regV = I2CreadByte(0x34, AXP2101_LDO_ONOFF_CTRL0);
+      regV = regV | (1 << AXP2101_ALDO1_BIT) | (1 << AXP2101_ALDO3_BIT) | (1 << AXP2101_ALDO4_BIT);
+      I2CwriteByte(0x34, AXP2101_LDO_ONOFF_CTRL0, regV);       // and power channels now enabled
+    } else {
+      // T-Beam V1.2 (SDA likely 21)
+      I2CwriteByte(0x34, 0x93, 0x1C);       // set ALDO2 voltage to 3.3V ( LoRa VCC )
+      I2CwriteByte(0x34, 0x94, 0x1C);       // set ALDO3 voltage to 3.3V ( GPS VDD )
+      I2CwriteByte(0x34, 0x6A, 0x04);       // set Button battery voltage to 3.0V ( backup battery )
+      I2CwriteByte(0x34, 0x64, 0x03);       // set Main battery voltage to 4.2V ( 18650 battery )
+      I2CwriteByte(0x34, 0x61, 0x05);       // set Main battery precharge current to 125mA
+      I2CwriteByte(0x34, 0x62, 0x0A);       // set Main battery charger current to 400mA ( 0x08-200mA, 0x09-300mA, 0x0A-400mA )
+      I2CwriteByte(0x34, 0x63, 0x15);       // set Main battery term charge current to 125mA
+      regV = I2CreadByte(0x34, AXP2101_LDO_ONOFF_CTRL0);
+      regV = regV | (1 << AXP2101_ALDO2_BIT) | (1 << AXP2101_ALDO3_BIT);
+      I2CwriteByte(0x34, AXP2101_LDO_ONOFF_CTRL0, regV);       // and power channels now enabled
+    }
+
     regV = I2CreadByte(0x34, 0x18);       // XPOWERS_AXP2101_CHARGE_GAUGE_WDT_CTRL
     regV = regV | 0x06;                   // set bit 1 (Main Battery) and bit 2 (Button battery)
     I2CwriteByte(0x34, 0x18, regV);       // and chargers now enabled
@@ -127,4 +158,85 @@ void Power::checkAXP()
   }
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
   Wire.end();
+}
+
+float Power::getBatteryVoltage() {
+    board_t board;
+    if (!ConfigManager::getInstance().getBoardConfig(board)) return 0;
+    
+    float voltage = 0;
+    
+    if (AXPchip == 1) { // AXP192
+        uint8_t buf[2];
+        I2Cread(AXP192_SLAVE_ADDRESS, 0x78, 2, buf);
+        voltage = ((buf[0] << 4) | (buf[1] & 0x0F)) * 1.1;
+    } else if (AXPchip == 2) { // AXP2101
+        uint8_t buf[2];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATTERY_VOLT_H, sizeof(buf), buf);
+        // Log::debug(PSTR("AXP2101 Raw Batt: 0x%02X 0x%02X"), buf[0], buf[1]);
+        voltage = (buf[0] << 8) | buf[1]; 
+    }
+    return voltage;
+}
+
+float Power::getVbusVoltage() {
+    board_t board;
+    if (!ConfigManager::getInstance().getBoardConfig(board)) return 0;
+    
+    float voltage = 0;
+    if (AXPchip == 1) { // AXP192
+        uint8_t buf[2];
+        I2Cread(AXP192_SLAVE_ADDRESS, 0x56, 2, buf); // VBUS voltage register for AXP192
+        voltage = ((buf[0] << 4) | (buf[1] & 0x0F)) * 1.7;
+    } else if (AXPchip == 2) { // AXP2101
+        uint8_t buf[2];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_VOLT_H, 2, buf);
+        voltage = (buf[0] << 8) | buf[1]; 
+    }
+    return voltage;
+}
+
+int Power::getBatteryPercentage() {
+    board_t board;
+    if (!ConfigManager::getInstance().getBoardConfig(board)) return 0;
+    
+    int pct = 0;
+    
+    // Safety check: if voltage is 0, percentage must be 0 (ignore fuel gauge or recalc)
+    float v = getBatteryVoltage();
+    if (v < 100) return 0; // Voltage is in mV, so < 0.1V is effectively 0
+
+    if (AXPchip == 2) { // AXP2101 has fuel gauge
+        pct = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE);
+        if (pct > 100) pct = 0; // Invalid
+    } else {
+        // Simple voltage based approx for others
+        if (v > 4100) pct = 100;
+        else if (v < 3300) pct = 0;
+        else pct = (v - 3300) / (4100 - 3300) * 100;
+    }
+    return pct;
+}
+
+void Power::setGnssPower(bool on) {
+    board_t board;
+    if (!ConfigManager::getInstance().getBoardConfig(board))
+        return;
+
+    if (AXPchip == 1) { // AXP192
+        uint8_t reg = I2CreadByte(AXP192_SLAVE_ADDRESS, 0x12);
+        if (on) reg |= (1 << 3); else reg &= ~(1 << 3); // LDO3
+        I2CwriteByte(AXP192_SLAVE_ADDRESS, 0x12, reg);
+    } else if (AXPchip == 2) { // AXP2101
+        uint8_t reg = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0);
+        uint8_t boardIdx = ConfigManager::getInstance().getBoard();
+        
+        if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) { // Supreme
+             if (on) reg |= (1 << AXP2101_ALDO4_BIT) | (1 << AXP2101_ALDO3_BIT); 
+             else reg &= ~((1 << AXP2101_ALDO4_BIT) | (1 << AXP2101_ALDO3_BIT));
+        } else {
+             if (on) reg |= (1 << AXP2101_ALDO3_BIT); else reg &= ~(1 << AXP2101_ALDO3_BIT);
+        }
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0, reg);
+    }
 }

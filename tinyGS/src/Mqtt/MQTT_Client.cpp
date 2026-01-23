@@ -48,6 +48,16 @@ espClient.setCACert(newRoot_CA);
 
 void MQTT_Client::loop()
 {
+  ConfigManager &configManager = ConfigManager::getInstance();
+  
+  // Block MQTT connection if location is not set
+  if (configManager.getLatitude() == 0.0 && configManager.getLongitude() == 0.0) {
+      if (millis() % 60000 < 500) { // Log once per minute
+          Log::console(PSTR("MQTT: Connection blocked. Waiting for valid station location (GPS or manual)."));
+      }
+      return;
+  }
+
   if (!connected())
   {
     status.mqtt_connected = false;

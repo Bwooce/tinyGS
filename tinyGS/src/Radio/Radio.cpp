@@ -189,6 +189,13 @@ if (status.modeminfo.tle[0] != 0)
   const char  *pcMyName = "tinyGS";    // Observer name
   double       dMyLAT   = ConfigManager::getInstance().getLatitude();  // Latitude (Breitengrad): N -> +, S -> -
   double       dMyLON   = ConfigManager::getInstance().getLongitude(); ;  // Longitude (Längengrad): E -> +, W -> -
+  
+  if (dMyLAT == 0.0 && dMyLON == 0.0) {
+      Log::debug(PSTR("Radio: Skipping TLE/Doppler. Location not set."));
+      status.tle.freqDoppler = 0;
+      return;
+  }
+
   double       dMyALT   = status.tle.tgsALT;      // Altitude ASL (m)
   
   double       dfreqRX  = status.modeminfo.frequency;     // Nominal downlink frequency

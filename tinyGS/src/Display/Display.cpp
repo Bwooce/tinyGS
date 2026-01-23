@@ -22,8 +22,9 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Mqtt/MQTT_credentials.h"
 #include "../Logger/Logger.h"
+#include "../GnssManager/GnssManager.h"
 
-SSD1306* display;
+OLEDDisplay* display;
 OLEDDisplayUi* ui = NULL;
 
 void msOverlay(OLEDDisplay *display, OLEDDisplayUiState* state);
@@ -49,13 +50,27 @@ int graphVal = 1;
 int delta = 1;
 uint8_t oldOledBright = -1; // to force brightness update on first run
 
+#define DISPLAY_TIMEOUT 300000 // 5 minutes
+static unsigned long lastDisplayActivity = 0;
+
+void displayResetTimeout() {
+    lastDisplayActivity = millis();
+}
+
 void displayInit()
 {
+  lastDisplayActivity = millis();
   board_t board;
+  uint8_t boardIdx = ConfigManager::getInstance().getBoard();
    if (!ConfigManager::getInstance().getBoardConfig(board))
     return;
   
-  display = new SSD1306(board.OLED__address, board.OLED__SDA, board.OLED__SCL);
+  if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
+      Log::console(PSTR("Display: Initializing SH1106 for Supreme"));
+      display = new SH1106Wire(board.OLED__address, board.OLED__SDA, board.OLED__SCL);
+  } else {
+      display = new SSD1306Wire(board.OLED__address, board.OLED__SDA, board.OLED__SCL);
+  }
 
   ui = new OLEDDisplayUi(display);
   ui->setTargetFPS(60);
@@ -105,10 +120,21 @@ void msOverlay(OLEDDisplay *display, OLEDDisplayUiState* state)
   timeinfo = localtime (&currenttime);
 
   // Usar buffer estático para evitar fragmentación del heap
-  char timeBuffer[12];
+  char timeBuffer[20];
   snprintf(timeBuffer, sizeof(timeBuffer), "%2d:%02d:%02d", 
            timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
   display->drawString(128, 0, timeBuffer);
+
+  // GNSS Status on the left
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+  char gnssBuffer[16];
+  if (GnssManager::getInstance().hasFix()) {
+      snprintf(gnssBuffer, sizeof(gnssBuffer), "GNSS(%d)", GnssManager::getInstance().getSatellites());
+      display->drawString(0, 0, gnssBuffer);
+  } else {
+      snprintf(gnssBuffer, sizeof(gnssBuffer), "GNSS...");
+      display->drawString(0, 0, gnssBuffer);
+  }
 
   if (ConfigManager::getInstance().getDayNightOled())
   {
@@ -354,6 +380,12 @@ void displayUpdate()
 {
   // Get the current OLED brightness from configuration
   uint8_t oledBright = ConfigManager::getInstance().getOledBright();
+
+  // Check for timeout
+  if (oledBright > 0 && millis() - lastDisplayActivity > DISPLAY_TIMEOUT) {
+      displayTurnOff();
+      return;
+  }
 
   // Check if brightness has changed
   if (oldOledBright != oledBright) {
