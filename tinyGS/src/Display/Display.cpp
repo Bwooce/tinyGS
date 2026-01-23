@@ -131,7 +131,176 @@ void msOverlay(OLEDDisplay *display, OLEDDisplayUiState* state)
   }
 }
 
-// ... (existing code) ...
+void drawRemoteFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y, uint8_t frameNumber)
+{
+  if (status.remoteTextFrameLength[frameNumber] == 0) ui->nextFrame();
+
+  for (uint8_t n = 0; n < status.remoteTextFrameLength[frameNumber]; n++)
+  {
+    switch (status.remoteTextFrame[frameNumber][n].text_font)
+    {
+      case 2:
+        display->setFont(ArialMT_Plain_16);
+        break;
+      default:
+        display->setFont(ArialMT_Plain_10);
+        break;
+    }
+
+    // 0 Left  1 Right  2 Center  3 Center Both
+    switch (status.remoteTextFrame[frameNumber][n].text_alignment) {
+      case 1:
+        display->setTextAlignment(TEXT_ALIGN_RIGHT);
+        break;
+      case 2:
+        display->setTextAlignment(TEXT_ALIGN_CENTER);
+        break;
+      case 3:
+        display->setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
+        break;
+      default:
+        display->setTextAlignment(TEXT_ALIGN_LEFT);
+        break;
+    }
+    display->drawString(x+status.remoteTextFrame[frameNumber][n].text_pos_x, y+ status.remoteTextFrame[frameNumber][n].text_pos_y,  status.remoteTextFrame[frameNumber][n].text);
+  }
+}
+
+void drawFrame1(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+  ConfigManager& configManager = ConfigManager::getInstance();
+
+  display->drawXbm(x +10, y , Logo_width, Logo_height, Logo_bits);
+  display->setFont(ArialMT_Plain_10);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  char staBuf[40];
+  snprintf(staBuf, sizeof(staBuf), "Sta: %s", configManager.getThingName());
+  display->drawString( x+70, y + 32, staBuf);
+}
+
+void drawFrame2(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+  drawRemoteFrame(display, state, x, y, 0);
+}
+
+void drawFrame3(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+  if (!status.radio_ready)
+  {
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+    display->setFont(ArialMT_Plain_10);
+    display->drawString(0, 0, "LoRa initialization failed.");
+    display->drawString(0, 14, "Browse " + WiFi.localIP().toString());
+    display->drawString(0, 28, "Ensure board selected");
+    display->drawString(0, 42, "matches your hardware");
+
+    return;
+  }
+
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(x,  y,  status.modeminfo.satellite);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  
+  // Usar buffer estático para evitar fragmentación del heap
+  char displayBuffer[40];
+  snprintf(displayBuffer, sizeof(displayBuffer), "%s @ %.4fMHz", status.modeminfo.modem_mode, status.modeminfo.frequency);
+  display->drawString(64+ x,  12 + y, displayBuffer);
+  //display->drawString(x,  12 + y, "F:" );
+  //display->setTextAlignment(TEXT_ALIGN_RIGHT);
+  
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+
+  if (strcmp(status.modeminfo.modem_mode, "LoRa") == 0)
+  {
+    snprintf(displayBuffer, sizeof(displayBuffer), "SF: %u", status.modeminfo.sf);
+    display->drawString(x,  23 + y, displayBuffer);
+    if (ConfigManager::getInstance().getAllowTx())
+    {
+      snprintf(displayBuffer, sizeof(displayBuffer), "Pwr:%ddBm", status.modeminfo.power);
+      display->drawString(x,  34 + y, displayBuffer); 
+    }
+    else
+    {
+      display->drawString(x,  34 + y, "TX OFF"); 
+    }
+    display->setTextAlignment(TEXT_ALIGN_RIGHT);
+    snprintf(displayBuffer, sizeof(displayBuffer), "BW:%.1fkHz", status.modeminfo.bw);
+    display->drawString(128 + x,  23 + y, displayBuffer);
+    snprintf(displayBuffer, sizeof(displayBuffer), "CR: %u", status.modeminfo.cr);
+    display->drawString(128 + x,  34 + y, displayBuffer);
+  } 
+  else
+  {
+    display->drawString(x,  23 + y, "FD/BW: " );
+    if (ConfigManager::getInstance().getAllowTx()) {
+      snprintf(displayBuffer, sizeof(displayBuffer), "P:%ddBm", status.modeminfo.power);
+      display->drawString(x,  34 + y, displayBuffer); 
+    }
+    else
+    {
+      display->drawString(x,  34 + y, "TX OFF"); 
+    }
+    display->setTextAlignment(TEXT_ALIGN_RIGHT);
+    snprintf(displayBuffer, sizeof(displayBuffer), "%.1f/%.1fkHz", status.modeminfo.freqDev, status.modeminfo.bw);
+    display->drawString(128 + x,  23 + y, displayBuffer);
+    snprintf(displayBuffer, sizeof(displayBuffer), "%.1fkbps", status.modeminfo.bitrate);
+    display->drawString(128 + x,  34 + y, displayBuffer);
+  }
+}
+
+void drawFrame4(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+  drawRemoteFrame(display, state, x, y, 1);
+}
+
+void drawFrame5(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+  display->drawXbm(x , y , earth_width, earth_height, earth_bits);
+  display->setColor(BLACK);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->fillRect(83,0,128,11);
+  display->setFont(ArialMT_Plain_10);
+ 
+  if (status.satPos[0] == 0 && status.satPos[1] == 0)
+  {
+    String msg = F("Waiting for Sat Pos");
+    display->drawString( 65+x,  49+y+(x/2), msg );
+    display->drawString( 63+x,  51+y+(x/2), msg );
+    display->setColor(WHITE);
+    display->drawString( 64+x,  50+y+(x/2), msg );
+  }
+  else 
+  {
+    if ((millis()-tick_interval)>tick_timing)
+    {
+      // Change the value to plot
+      graphVal+=delta;
+      tick_interval=millis();
+      // If the value reaches a limit, then change delta of value
+      if (graphVal >= 6)      { delta = -1;  tick_timing=50; }// ramp down value
+      else if (graphVal <= 1) { delta = +1; tick_timing=100; } // ramp up value
+    }
+
+    display->fillCircle(status.satPos[0]+x, status.satPos[1]+y, graphVal+1);
+    display->setColor(WHITE);
+    display->drawCircle(status.satPos[0]+x, status.satPos[1]+y, graphVal);
+    display->setColor(BLACK);
+    display->drawCircle(status.satPos[0]+x, status.satPos[1]+y, (graphVal/3)+1);
+    display->setColor(WHITE);
+    display->drawCircle(status.satPos[0]+x, status.satPos[1]+y, graphVal/3);
+  }
+}
+
+void drawFrame6(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+  drawRemoteFrame(display, state, x, y, 2);
+}
+
+void drawFrame7(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
+{
+  drawRemoteFrame(display, state, x, y, 3);
+}
 
 void drawFrame8(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
 {

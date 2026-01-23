@@ -1184,40 +1184,6 @@ void MQTT_Client::begin()
 
 
 int MQTT_Client::voltage() {
-  // Try to get voltage from Power manager (AXP192/AXP2101)
-  float pmuVoltage = Power::getInstance().getBatteryVoltage();
-  if (pmuVoltage > 0) {
-      return (int)pmuVoltage;
-  }
-
-  // Fallback for boards without PMU (Heltec V1/V2 etc uses GPIO 36)
-  int medianVoltage;
-  int length = 21;
-  int voltages[22];
-  
-  for (int i = 0; i < 21; i++)
-  {
-    voltages[i] = analogRead(36); 
-    }
-  
-  //    BubbleSortAsc   from https://www.luisllamas.es/arduino-bubble-sort/
-   int i, j, flag = 1;
-   int temp;
-   for (i = 1; (i <= length) && flag; i++)
-   {
-      flag = 0;
-      for (j = 0; j < (length - 1); j++)
-      {
-         if (voltages[j + 1] < voltages[j])
-         {
-            temp = voltages[j];
-            voltages[j] = voltages[j + 1];
-            voltages[j + 1] = temp;
-            flag = 1;
-         }
-      }
-   }
-  medianVoltage = voltages[10];
-  return medianVoltage;
+  return (int)Power::getInstance().getBatteryVoltage();
 }
 

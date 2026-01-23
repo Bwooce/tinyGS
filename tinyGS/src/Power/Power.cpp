@@ -174,7 +174,31 @@ float Power::getBatteryVoltage() {
         uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATTERY_VOLT_H, sizeof(buf), buf);
         // AXP2101: [13:6] in reg 0x34, [5:0] in reg 0x35
-        voltage = ((buf[0] << 6) | (buf[1] & 0x3F)); 
+        voltage = ((buf[0] << AXP2101_BATT_VOLT_SHIFT) | (buf[1] & AXP2101_BATT_VOLT_MASK)); 
+    } else {
+        // Fallback for boards without PMU (Heltec V1/V2 etc uses GPIO 36)
+        int length = 21;
+        int voltages[22];
+        
+        for (int i = 0; i < 21; i++) {
+            voltages[i] = analogRead(36); 
+        }
+        
+        // BubbleSortAsc
+        int i, j, flag = 1;
+        int temp;
+        for (i = 1; (i <= length) && flag; i++) {
+            flag = 0;
+            for (j = 0; j < (length - 1); j++) {
+                if (voltages[j + 1] < voltages[j]) {
+                    temp = voltages[j];
+                    voltages[j] = voltages[j + 1];
+                    voltages[j + 1] = temp;
+                    flag = 1;
+                }
+            }
+        }
+        voltage = (float)voltages[10];
     }
     return voltage;
 }
@@ -186,14 +210,13 @@ float Power::getVbusVoltage() {
     float voltage = 0;
     if (AXPchip == 1) { // AXP192
         uint8_t buf[2] = {0, 0};
-        I2Cread(AXP192_SLAVE_ADDRESS, 0x56, 2, buf); // VBUS voltage register for AXP192
+        I2Cread(AXP192_SLAVE_ADDRESS, 0x5A, 2, buf); // 0x5A: VBUS voltage [11:4], 0x5B: [3:0]
         voltage = ((buf[0] << 4) | (buf[1] & 0x0F)) * 1.7;
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_VOLT_H, 2, buf);
-        // AXP2101 VBUS: [13:5] in 0x38, [4:0] in 0x39? 
-        // Datasheet: 0x38 VBUS_Val[13:6], 0x39 VBUS_Val[5:0]
-        voltage = ((buf[0] << 6) | (buf[1] & 0x3F));
+        // AXP2101 VBUS: [13:6] in 0x38, [5:0] in 0x39
+        voltage = ((buf[0] << AXP2101_VBUS_VOLT_SHIFT) | (buf[1] & AXP2101_VBUS_VOLT_MASK));
     }
     return voltage;
 }

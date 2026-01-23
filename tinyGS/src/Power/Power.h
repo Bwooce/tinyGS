@@ -70,6 +70,11 @@
 #define AXP2101_VBUS_VOLT_L         0x39
 #define AXP2101_FUEL_GAUGE          0xA4
 
+#define AXP2101_BATT_VOLT_MASK      0x3F
+#define AXP2101_BATT_VOLT_SHIFT     6
+#define AXP2101_VBUS_VOLT_MASK      0x3F
+#define AXP2101_VBUS_VOLT_SHIFT     6
+
 extern Status status;
 
 class Power {
