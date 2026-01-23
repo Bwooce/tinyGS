@@ -115,6 +115,9 @@ void checkStationStatus();
 void wifiConnected()
 {
   Log::console(PSTR("WiFi Connected! IP: %s"), WiFi.localIP().toString().c_str());
+  setupNTP();
+  arduino_ota_setup();
+  displayShowConnected();
 }
 
 void onWiFiEvent(WiFiEvent_t event) {
