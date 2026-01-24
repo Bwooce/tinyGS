@@ -2,8 +2,9 @@ import serial
 import time
 import sys
 
-PORT = '/dev/ttyACM0'
-BAUD = 115200
+# Get port and baud from arguments if provided
+PORT = sys.argv[1] if len(sys.argv) > 1 else '/dev/ttyACM0'
+BAUD = int(sys.argv[2]) if len(sys.argv) > 2 else 115200
 
 try:
     ser = serial.Serial(PORT, BAUD, timeout=1)
@@ -16,24 +17,18 @@ try:
     time.sleep(0.1)
     
     print("Resetting device...")
-    ser.dtr = False
-    ser.rts = True  # RTS low (True in pyserial logic for active low lines often inverted, but let's try standard)
-    # Standard ESP32 Reset: RTS low (True), DTR high (False) -> Reset
-    # Bootloader: RTS low (True), DTR low (True) -> GPIO0 low
-    
-    # Let's try the standard esptool sequence:
-    # dtr=False (High), rts=True (Low) -> Reset active
+    # Standard ESP32 Reset logic for many serial adapters:
+    # EN (Reset) connected to RTS
+    # GPIO0 connected to DTR
     ser.dtr = False 
     ser.rts = True
     time.sleep(0.1)
-    
-    # dtr=False (High), rts=False (High) -> Reset release
     ser.rts = False
     
-    print("Monitoring... (Press Ctrl+C to stop, auto-stop in 20s)")
+    print("Monitoring... (Press Ctrl+C to stop, auto-stop in 40s)")
     
     start_time = time.time()
-    while time.time() - start_time < 20:
+    while time.time() - start_time < 40:
         if ser.in_waiting:
             try:
                 line = ser.readline().decode('utf-8', errors='replace').strip()

@@ -22,6 +22,7 @@ public:
     double getLongitude();
     double getAltitude();
     void syncTime();
+    bool isSleeping();
 
 private:
     GnssManager();

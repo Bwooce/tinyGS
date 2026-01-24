@@ -835,6 +835,7 @@ void MQTT_Client::manageMQTTData(char *topic, uint8_t *payload, unsigned int len
      // Serial.print("Base64 decoded. Length: ");
      // Serial.println(outputLen);
 
+      status.tle.freqDoppler = 0; // Reset Doppler before calculation to avoid stale values
       radio.tle();
 
       //If you want to print the decoded data for debugging purposes:

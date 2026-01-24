@@ -244,7 +244,9 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>WiFi RSSI </td><td>" + String(WiFi.isConnected() ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + "</td></tr>";
   s += "<tr><td>Radio </td><td>" + String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + "</td></tr>";
   
-  if (GnssManager::getInstance().hasFix()) {
+  if (GnssManager::getInstance().isSleeping()) {
+      s += "<tr><td>GNSS </td><td><span class='G'>SLEEP (" + String(GnssManager::getInstance().getSatellites()) + ")</span></td></tr>";
+  } else if (GnssManager::getInstance().hasFix()) {
       s += "<tr><td>GNSS </td><td><span class='G'>FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span></td></tr>";
   } else {
       s += "<tr><td>GNSS </td><td><span class='R'>NO FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span></td></tr>";
@@ -501,7 +503,9 @@ void ConfigManager::handleRefreshWorldmap()
   data_string += String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + ",";
   
   // GNSS Status
-  if (GnssManager::getInstance().hasFix()) {
+  if (GnssManager::getInstance().isSleeping()) {
+      data_string += "<span class='G'>SLEEP (" + String(GnssManager::getInstance().getSatellites()) + ")</span>,";
+  } else if (GnssManager::getInstance().hasFix()) {
       data_string += "<span class='G'>FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span>,";
   } else {
       data_string += "<span class='R'>NO FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span>,";

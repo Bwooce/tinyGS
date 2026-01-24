@@ -176,7 +176,7 @@ public:
   const char *getMqttPass() { return mqttPass; }
   float getLatitude() { return atof(latitude); }
   float getLongitude() { return atof(longitude); }
-  const char *getTZ() { return tz + 3; } // +3 removes the first 3 digits used for time zone deduplication
+  const char *getTZ() { return strlen(tz) > 3 ? tz + 3 : "GMT0"; } // Safe offset, default to GMT0
   uint8_t getBoard() { return atoi(board); }
   uint8_t getOledBright() { return atoi(oledBright); }
   bool getAllowTx() { return !strcmp(allowTx, CB_SELECTED_STR); }

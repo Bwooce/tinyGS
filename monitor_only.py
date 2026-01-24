@@ -2,8 +2,9 @@ import serial
 import time
 import sys
 
-PORT = '/dev/ttyACM0'
-BAUD = 115200
+# Get port and baud from arguments if provided
+PORT = sys.argv[1] if len(sys.argv) > 1 else '/dev/ttyACM0'
+BAUD = int(sys.argv[2]) if len(sys.argv) > 2 else 115200
 
 try:
     ser = serial.Serial(PORT, BAUD, timeout=1)

@@ -164,3 +164,7 @@ void GnssManager::syncTime() {
                  gps.time.hour(), gps.time.minute(), gps.time.second());
     lastSync = millis();
 }
+
+bool GnssManager::isSleeping() {
+    return enabled && !powered;
+}

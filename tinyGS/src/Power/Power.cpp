@@ -31,6 +31,8 @@ byte irqstat0;
 byte irqstat1;
 byte irqstat2;
 
+#define LEGACY_BATT_PIN 36
+
 Power::Power() : pmuWire(&Wire) {}
 
 void Power::I2CwriteByte(uint8_t Address, uint8_t Register, uint8_t Data)
@@ -181,7 +183,7 @@ float Power::getBatteryVoltage() {
         int voltages[22];
         
         for (int i = 0; i < 21; i++) {
-            voltages[i] = analogRead(36); 
+            voltages[i] = analogRead(LEGACY_BATT_PIN); 
         }
         
         // BubbleSortAsc

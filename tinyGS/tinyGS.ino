@@ -167,6 +167,7 @@ void setup()
   if ((configManager.getMqttServer ()[0] == '\0') || (configManager.getMqttUser ()[0] == '\0') || (configManager.getMqttPass ()[0] == '\0')) {
       mqttCredentials.generateOTPCode ();
   }
+  setupNTP(); // Initialize NTP and Timezone
   configManager.setWifiConnectionCallback(wifiConnected);
   configManager.setConfiguredCallback(configured);
   configManager.init();
@@ -415,8 +416,16 @@ void checkStationStatus() {
     bool hasMqtt = (configManager.getMqttUser()[0] != '\0') && (configManager.getMqttPass()[0] != '\0');
     bool hasLoc = (configManager.getLatitude() != 0.0) || (configManager.getLongitude() != 0.0);
     bool hasName = strcmp(configManager.getThingName(), "My TinyGS") != 0;
+    bool isConnected = (WiFi.status() == WL_CONNECTED);
 
-    if (hasWifi && hasMqtt && hasLoc && hasName && WiFi.status() == WL_CONNECTED) {
+    static unsigned long lastDebug = 0;
+    if (millis() - lastDebug > 10000) {
+        Log::debug(PSTR("AP Mode Check: WiFi:%d, MQTT:%d, Loc:%d, Name:%d, Connected:%d"), 
+            hasWifi, hasMqtt, hasLoc, hasName, isConnected);
+        lastDebug = millis();
+    }
+
+    if (hasWifi && hasMqtt && hasLoc && hasName && isConnected) {
         Log::console(PSTR("Auto-config: All parameters present and WiFi connected. Transitioning to ONLINE..."));
         configManager.changeState(IOTWEBCONF_STATE_ONLINE);
     }
