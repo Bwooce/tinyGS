@@ -172,10 +172,13 @@ void setup()
   configManager.setConfiguredCallback(configured);
   configManager.init();
   Power::getInstance().checkAXP();
+  radio.init(); // Initialize radio hardware early
   GnssManager::getInstance().begin();
   
   if (strlen(configManager.getWiFiSSID()) > 0) {
       Log::console(PSTR("WiFi credentials found, forcing station mode..."));
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(configManager.getWiFiSSID(), configManager.getWiFiPassword());
       configManager.forceApMode(false);
   }
 
@@ -347,6 +350,16 @@ void loop() {
   }
 
   // connected
+
+  // Attempt to fetch configuration if location is missing (e.g. first run after partial config)
+  if (configManager.getLatitude() == 0.0 && configManager.getLongitude() == 0.0) {
+      static bool triedLocFetch = false;
+      if (!triedLocFetch) {
+          Log::console(PSTR("Location missing. Attempting to fetch configuration from TinyGS server..."));
+          mqttAutoconf();
+          triedLocFetch = true;
+      }
+  }
 
   mqtt.loop();
   OTA::loop();
