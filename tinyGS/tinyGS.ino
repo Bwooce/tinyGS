@@ -409,8 +409,9 @@ void checkButton()
 }
 
 void checkStationStatus() {
-    // Only proceed if we are in AP mode or similar (State 1)
-    if (configManager.getState() != IOTWEBCONF_STATE_AP_MODE) return;
+    // Trigger in NOT_CONFIGURED (1) or AP_MODE (2)
+    uint8_t state = configManager.getState();
+    if (state != IOTWEBCONF_STATE_NOT_CONFIGURED && state != IOTWEBCONF_STATE_AP_MODE) return;
 
     bool hasWifi = strlen(configManager.getWiFiSSID()) > 0;
     bool hasMqtt = (configManager.getMqttUser()[0] != '\0') && (configManager.getMqttPass()[0] != '\0');
@@ -420,8 +421,8 @@ void checkStationStatus() {
 
     static unsigned long lastDebug = 0;
     if (millis() - lastDebug > 10000) {
-        Log::debug(PSTR("AP Mode Check: WiFi:%d, MQTT:%d, Loc:%d, Name:%d, Connected:%d"), 
-            hasWifi, hasMqtt, hasLoc, hasName, isConnected);
+        Log::console(PSTR("Status Check (State %d): WiFi:%d, MQTT:%d, Loc:%d, Name:%d, Connected:%d"), 
+            state, hasWifi, hasMqtt, hasLoc, hasName, isConnected);
         lastDebug = millis();
     }
 
