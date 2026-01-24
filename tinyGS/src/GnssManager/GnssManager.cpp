@@ -7,7 +7,7 @@
 #define GNSS_SYNC_INTERVAL ((24 * 3600 - 61) * 1000) 
 #define GNSS_TIMEOUT (15 * 60 * 1000)         // 15 Minutes max on time without fix
 
-GnssManager::GnssManager() : serial(nullptr), enabled(false), powered(false), lastSync(0), powerOnTime(0) {}
+GnssManager::GnssManager() : serial(nullptr), enabled(false), powered(false), locationUpdated(false), lastSync(0), lastLocationUpdate(0), powerOnTime(0) {}
 
 void GnssManager::begin() {
     board_t board;
@@ -60,40 +60,92 @@ void GnssManager::loop() {
         }
 
         if (hasFix()) {
-            static bool fixLogged = false;
-            if (!fixLogged) {
-                Log::console(PSTR("GNSS: Fix Acquired! Lat: %.6f Lon: %.6f"), getLatitude(), getLongitude());
-                
-                // Update ConfigManager if currently empty or at 0,0 (manual override protection)
-                if (ConfigManager::getInstance().getLatitude() == 0.0 && ConfigManager::getInstance().getLongitude() == 0.0) {
+            syncTime();
+
+            // Auto Location Logic
+            if (ConfigManager::getInstance().getAutoLocation()) {
+                unsigned long interval = ConfigManager::getInstance().getGnssInterval() * 1000;
+                // If interval > 0, update periodically. If 0, update once (if never updated).
+                bool shouldUpdate = (interval > 0 && millis() - lastLocationUpdate > interval) || 
+                                    (interval == 0 && lastLocationUpdate == 0);
+
+                if (shouldUpdate) {
+                    ConfigManager::getInstance().setLatRuntime(getLatitude());
+                    ConfigManager::getInstance().setLonRuntime(getLongitude());
+                    lastLocationUpdate = millis();
+                    locationUpdated = true;
+                    Log::console(PSTR("GNSS: Auto-updated location: %.3f, %.3f"), getLatitude(), getLongitude());
+                }
+            } else {
+                // Legacy behavior: Only update if 0.0/0.0
+                static bool fixLogged = false;
+                if (!fixLogged && ConfigManager::getInstance().getLatitude() == 0.0 && ConfigManager::getInstance().getLongitude() == 0.0) {
                     char latBuf[16], lonBuf[16];
                     snprintf(latBuf, sizeof(latBuf), "%.3f", getLatitude());
                     snprintf(lonBuf, sizeof(lonBuf), "%.3f", getLongitude());
                     ConfigManager::getInstance().setLat(latBuf);
                     ConfigManager::getInstance().setLon(lonBuf);
-                    Log::console(PSTR("GNSS: Updated station location to current fix."));
-                } else {
-                    Log::console(PSTR("GNSS: Manual location override detected, skipping auto-update."));
+                    Log::console(PSTR("GNSS: Updated station location to current fix (Legacy)."));
+                    fixLogged = true;
                 }
-                fixLogged = true;
             }
-            syncTime();
         }
     }
 }
 
 void GnssManager::checkPowerCycle() {
     unsigned long now = millis();
+    bool autoLoc = ConfigManager::getInstance().getAutoLocation();
+    unsigned long interval = ConfigManager::getInstance().getGnssInterval() * 1000;
 
+    // Auto Location Power Management
+    if (autoLoc) {
+        if (interval > 0) {
+            // Periodic Mode
+            if (powered) {
+                // Turn off if we updated location in this session
+                if (lastLocationUpdate > powerOnTime) {
+                    Log::console(PSTR("GNSS: Location updated, powering down."));
+                    Power::getInstance().setGnssPower(false);
+                    powered = false;
+                } else if (now - powerOnTime > GNSS_TIMEOUT) {
+                    Log::console(PSTR("GNSS: Timeout (no fix), powering down."));
+                    Power::getInstance().setGnssPower(false);
+                    powered = false;
+                }
+            } else {
+                // Turn on if interval passed
+                if (now - lastLocationUpdate > interval) {
+                    Log::console(PSTR("GNSS: Waking for periodic update."));
+                    Power::getInstance().setGnssPower(true);
+                    powered = true;
+                    powerOnTime = now;
+                }
+            }
+            return; // Skip legacy logic
+        } else {
+            // Interval 0 = Always On (or Once). 
+            // If we interpret 0 as "Once", we should sleep after update.
+            // But usually 0 means "Disabled" or "Continuous". 
+            // Let's assume 0 with AutoLoc ON means "Continuous / Once at boot then Manual control?".
+            // Let's keep it powered if AutoLoc is ON and Interval is 0, to behave like "Always On".
+            if (!powered) {
+                 Power::getInstance().setGnssPower(true);
+                 powered = true;
+                 powerOnTime = now;
+            }
+            return;
+        }
+    }
+
+    // Legacy Power Management (Time Sync Only)
     if (powered) {
         // Turn off if synced recently
         if (now - lastSync < 60000 && lastSync != 0) { 
-             // Synced less than 1 min ago -> Success
              Log::console(PSTR("GNSS: Time synced, powering down GNSS to save energy."));
              Power::getInstance().setGnssPower(false);
              powered = false;
         }
-        // Timeout
         else if (now - powerOnTime > GNSS_TIMEOUT) {
             Log::console(PSTR("GNSS: Timeout (no fix), powering down."));
             Power::getInstance().setGnssPower(false);

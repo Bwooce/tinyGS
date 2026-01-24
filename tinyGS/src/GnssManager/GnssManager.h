@@ -23,6 +23,8 @@ public:
     double getAltitude();
     void syncTime();
     bool isSleeping();
+    bool isLocationUpdated() { return locationUpdated; }
+    void clearLocationUpdated() { locationUpdated = false; }
 
 private:
     GnssManager();
@@ -31,7 +33,9 @@ private:
     HardwareSerial* serial;
     bool enabled; // Configured and pins available
     bool powered; // Currently powered on
+    bool locationUpdated;
     unsigned long lastSync;
+    unsigned long lastLocationUpdate;
     unsigned long powerOnTime;
 };
 

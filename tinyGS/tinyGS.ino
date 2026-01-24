@@ -351,6 +351,13 @@ void loop() {
 
   // connected
 
+  // Check for GNSS Location Updates
+  if (GnssManager::getInstance().isLocationUpdated()) {
+      Log::console(PSTR("GNSS: Location changed, sending status to MQTT..."));
+      mqtt.sendStatus();
+      GnssManager::getInstance().clearLocationUpdated();
+  }
+
   // Attempt to fetch configuration if location is missing (e.g. first run after partial config)
   if (configManager.getLatitude() == 0.0 && configManager.getLongitude() == 0.0) {
       static bool triedLocFetch = false;
@@ -610,6 +617,7 @@ void handleRawSerial()
 
           Log::console(PSTR("Battery: %.2fV (%d%%)"), Power::getInstance().getBatteryVoltage()/1000.0, Power::getInstance().getBatteryPercentage());
           Log::console(PSTR("VBUS: %.2fV"), Power::getInstance().getVbusVoltage()/1000.0);
+          Log::console(PSTR("AutoLoc: %d, Interval: %d"), configManager.getAutoLocation(), configManager.getGnssInterval());
           Log::console(PSTR("Radio Ready: %s"), radio.isReady() ? "YES" : "NO");
           break;
       }

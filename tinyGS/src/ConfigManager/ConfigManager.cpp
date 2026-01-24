@@ -109,6 +109,8 @@ ConfigManager::ConfigManager()
   groupBoardConfig.addItem(&telemetry3rdParam);
   groupBoardConfig.addItem(&testParam);
   groupBoardConfig.addItem(&autoUpdateParam);
+  groupBoardConfig.addItem(&autoLocationParam);
+  groupBoardConfig.addItem(&gnssIntervalParam);
   addParameterGroup(&groupBoardConfig);
 
   groupAdvanced.addItem(&boardTemplateParam);
