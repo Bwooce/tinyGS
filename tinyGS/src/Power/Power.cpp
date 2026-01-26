@@ -76,7 +76,7 @@ void Power::checkAXP()
   Log::console(PSTR("AXPxxx chip?"));   
   byte regV = 0;
   
-  if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
+  if (boardIdx == TTGO_TBEAM_SX1262) {
       Log::console(PSTR("PMU: Using Supreme Wire1 on pins %d/%d"), SUPREME_PMU_SDA, SUPREME_PMU_SCL);
       Wire1.begin(SUPREME_PMU_SDA, SUPREME_PMU_SCL);
       pmuWire = &Wire1;
@@ -112,7 +112,7 @@ void Power::checkAXP()
     AXPchip = 2;
     Log::console(PSTR("AXP2101 found"));  // T-Beam V1.2 or Supreme with AXP2101 power controller
     
-    if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
+    if (boardIdx == TTGO_TBEAM_SX1262) {
       // T-Beam Supreme
       Log::console(PSTR("Configuring for T-Beam Supreme"));
       I2CwriteByte(0x34, 0x92, 0x1C);       // set ALDO1 voltage to 3.3V ( Display )
@@ -258,7 +258,7 @@ void Power::setGnssPower(bool on) {
         uint8_t reg = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0);
         uint8_t boardIdx = ConfigManager::getInstance().getBoard();
         
-        if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) { // Supreme
+        if (boardIdx == TTGO_TBEAM_SX1262) { // Supreme
              if (on) reg |= (1 << AXP2101_ALDO4_BIT) | (1 << AXP2101_ALDO3_BIT); 
              else reg &= ~((1 << AXP2101_ALDO4_BIT) | (1 << AXP2101_ALDO3_BIT));
         } else {

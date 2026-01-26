@@ -65,7 +65,7 @@ void displayInit()
    if (!ConfigManager::getInstance().getBoardConfig(board))
     return;
   
-  if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
+  if (boardIdx == TTGO_TBEAM_SX1262) {
       Log::console(PSTR("Display: Initializing SH1106 for Supreme"));
       display = new SH1106Wire(board.OLED__address, board.OLED__SDA, board.OLED__SCL);
   } else {

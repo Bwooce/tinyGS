@@ -20,27 +20,26 @@ The changes have been grouped into 7 logical Pull Requests (PRs) to ensure atomi
 
 ---
 
-## PR 2: Power Management Refactor
-**Objective:** Modernize the Power module to support newer PMUs and unify battery reading logic.
+## PR 2: Infrastructure & Shared Definitions
+**Objective:** Update configuration structures and enums to support future features (GNSS, New Boards) without implementing the logic yet. This resolves dependencies for subsequent PRs.
+
+*   **Board Struct:** Update `board_t` in `ConfigManager.h` to include `GNSS_RX`, `GNSS_TX`, and `GNSS_WAKEUP` fields.
+*   **Board Enum:** Rename existing `TTGO_TBEAM_SX1262` to `LILYGO_TBEAM_SUPREME` to unify board definitions.
+*   **Constants:** Add T-Beam Supreme pin definitions.
+
+**Files:** `src/ConfigManager/ConfigManager.h`
+
+---
+
+## PR 3: Power Management Refactor
+**Objective:** Modernize the Power module to support newer PMUs and unify battery reading logic. Depends on PR 2.
 
 *   **AXP2101:** Add support for the X-Powers AXP2101 PMU (used in T-Beam Supreme and T-Beam S3 Core).
 *   **Unified Battery Logic:** Refactor `Power.cpp` to use a consistent `LEGACY_BATT_PIN` fallback for non-PMU boards, removing hardcoded magic numbers from board definitions.
 *   **Voltage Precision:** Improve battery voltage reporting precision (1mV step).
-*   **GNSS Power Control:** Add `setGnssPower(bool on)` method stub/implementation to `Power` class (to be used by GNSS Manager).
+*   **GNSS Power Control:** Add `setGnssPower(bool on)` method to `Power` class (using enums from PR 2).
 
 **Files:** `src/Power/Power.h`, `src/Power/Power.cpp`
-
----
-
-## PR 3: Configuration Structure Updates
-**Objective:** Update configuration structures and enums to support future features (GNSS, New Boards) without implementing the logic yet. This resolves circular dependencies.
-
-*   **Board Struct:** Update `board_t` in `ConfigManager.h` to include `GNSS_RX`, `GNSS_TX`, and `GNSS_WAKEUP` fields.
-*   **Board Enum:** Add `LILYGO_TBEAM_SUPREME` to `boardNum` enum.
-*   **Parameters:** Add `autoLocation` and `gnssInterval` buffer and parameter declarations to `ConfigManager` class (initialized but logic not active).
-*   **Constants:** Add T-Beam Supreme pin definitions.
-
-**Files:** `src/ConfigManager/ConfigManager.h`
 
 ---
 
@@ -67,14 +66,14 @@ The changes have been grouped into 7 logical Pull Requests (PRs) to ensure atomi
 
 ---
 
-## PR 6: New Board Support - LilyGo T-Beam Supreme
-**Objective:** Add official support for the LilyGo T-Beam Supreme (S3 Core). Depends on PR 3 (Structs).
+## PR 6: Enhanced Board Support - LilyGo T-Beam Supreme
+**Objective:** Finalize support for the LilyGo T-Beam Supreme (S3 Core) by updating the existing definition. Depends on PR 2 and PR 5.
 
-*   **Board Array:** Update `boards` array in `ConfigManager.cpp` to include the T-Beam Supreme definition using constants from PR 3.
+*   **Board Array:** Update the existing "Sup" board definition in `ConfigManager.cpp` to use the frequency-neutral `LilyGo T-Beam Supreme (SX1262)` name and constants (LED pin 3).
 *   **Auto-Detection:** Add logic in `boardDetection()` to identify the board via the AXP2101 on Wire1.
-*   **PlatformIO:** Add `lilygo-t-beam-supreme` environment to `platformio.ini`.
+*   **PlatformIO:** Add `lilygo-t-beam-supreme` environment to `platformio.ini` and add `boards/lilygo-t-beam-supreme.json`.
 
-**Files:** `src/ConfigManager/ConfigManager.cpp`, `platformio.ini`
+**Files:** `src/ConfigManager/ConfigManager.cpp`, `platformio.ini`, `boards/lilygo-t-beam-supreme.json`
 
 ---
 
@@ -86,4 +85,4 @@ The changes have been grouped into 7 logical Pull Requests (PRs) to ensure atomi
 *   **MQTT Push:** Add logic in `tinyGS.ino` to detect location changes and call `mqtt.sendStatus()` immediately.
 *   **Defaults:** Enable Auto Location by default for GPS-equipped boards.
 
-**Files:** `src/ConfigManager/ConfigManager.cpp`, `src/GnssManager/GnssManager.cpp`, `tinyGS.ino`, `src/ConfigManager/html.h` (CSS updates)
+**Files:** `src/ConfigManager/ConfigManager.h`, `src/ConfigManager/ConfigManager.cpp`, `src/GnssManager/GnssManager.cpp`, `tinyGS.ino`, `src/ConfigManager/html.h` (CSS updates)
