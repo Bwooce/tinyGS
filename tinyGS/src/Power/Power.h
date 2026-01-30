@@ -54,6 +54,10 @@
 #define AXP2101_BATTERY_VOLT_L      0x35
 #define AXP2101_VBUS_VOLT_H         0x38
 #define AXP2101_VBUS_VOLT_L         0x39
+#define AXP2101_BATT_DISCHG_CUR_H   0x3C
+#define AXP2101_BATT_DISCHG_CUR_L   0x3D
+#define AXP2101_BATT_CHG_CUR_H      0x3E
+#define AXP2101_BATT_CHG_CUR_L      0x3F
 #define AXP2101_FUEL_GAUGE          0xA4
 
 #define AXP2101_BATT_VOLT_MASK      0xFF
@@ -74,6 +78,9 @@ public:
      float getBatteryVoltage();
      int getBatteryPercentage();
      float getVbusVoltage();
+     bool isVbusPresent();
+     bool isCharging();
+     float getBatteryCurrent();
      void setGnssPower(bool on);
      void deepSleepSensors();
      TwoWire* getPmuWire() { return pmuWire; }
