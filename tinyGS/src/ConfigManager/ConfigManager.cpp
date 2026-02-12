@@ -23,6 +23,8 @@
 #include "../Radio/Radio.h"
 #include "../Display/graphics.h"
 #include "../Mqtt/MQTT_credentials.h"
+#include "../Power/Power.h"
+#include "../GnssManager/GnssManager.h"
 #include "ArduinoJson.h"
 #if ARDUINOJSON_USE_LONG_LONG == 0 && !PLATFORMIO
 #error "Using Arduino IDE is not recommended, please follow this guide https://github.com/G4lile0/tinyGS/wiki/Arduino-IDE or edit /ArduinoJson/src/ArduinoJson/Configuration.hpp and amend to #define ARDUINOJSON_USE_LONG_LONG 1 around line 68"
@@ -331,6 +333,25 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>Frequency error </td><td>" + String(status.lastPacketInfo.frequencyerror) + "</td></tr>";
   s += "<tr><td colspan=\"2\" style=\"text-align:center;\">" + String(status.lastPacketInfo.crc_error ? "CRC ERROR!" : "") + "</td></tr>";
   s += F("</table></div>");
+
+  s += F("<div class=\"card\"><h3>Hardware Status</h3><table id=\"hwstatus\">");
+  {
+    float vbat = Power::getInstance().getBatteryVoltage();
+    int pct = Power::getInstance().getBatteryPercentage();
+    String batStr = String(vbat, 2) + "V / " + String(pct) + "%";
+    s += "<tr><td>Battery </td><td>" + batStr + "</td></tr>";
+  }
+  {
+    GnssManager& gnss = GnssManager::getInstance();
+    String gnssStr;
+    if (!gnss.isEnabled()) gnssStr = "N/A";
+    else if (gnss.isSleeping()) gnssStr = "SLEEP";
+    else if (gnss.hasFix()) gnssStr = "FIX (" + String(gnss.getSatellites()) + " sats)";
+    else gnssStr = "NO FIX (" + String(gnss.getSatellites()) + " sats)";
+    s += "<tr><td>GNSS </td><td>" + gnssStr + "</td></tr>";
+  }
+  s += F("</table></div>");
+
   s += FPSTR(IOTWEBCONF_CONSOLE_BODY_INNER);
   s += "<br /><button style='max-width: 1080px;' onclick=\"window.location.href='" + String(ROOT_URL) + "';\">Go Back</button><br /><br />";
   s += FPSTR(IOTWEBCONF_HTML_END);
@@ -550,6 +571,21 @@ else {
   data_string += String(status.lastPacketInfo.frequencyerror) + ",";
   data_string += String(status.lastPacketInfo.crc_error ? "CRC ERROR!" : "");
 
+  // hardware status (for hwstatus table)
+  {
+    float vbat = Power::getInstance().getBatteryVoltage();
+    int pct = Power::getInstance().getBatteryPercentage();
+    data_string += "," + String(vbat, 2) + "V / " + String(pct) + "%";
+  }
+  {
+    GnssManager& gnss = GnssManager::getInstance();
+    String gnssStr;
+    if (!gnss.isEnabled()) gnssStr = "N/A";
+    else if (gnss.isSleeping()) gnssStr = "SLEEP";
+    else if (gnss.hasFix()) gnssStr = "FIX (" + String(gnss.getSatellites()) + " sats)";
+    else gnssStr = "NO FIX (" + String(gnss.getSatellites()) + " sats)";
+    data_string += "," + gnssStr;
+  }
 
   server.sendContent(data_string + "\n");
 
