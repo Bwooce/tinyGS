@@ -11,3 +11,10 @@ context_portal
 memvidagentmemory.instructions.md
 
 *.bin
+
+# AI workspace files
+GEMINI.md
+CLAUDE.md
+AGENT.md
+PLAN.md
+power_management_improvement.md
