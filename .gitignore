@@ -10,10 +10,3 @@ tinyGS/tinyGS.ino.cpp
 context_portal
 
 *.bin
-
-# AI workspace files
-GEMINI.md
-CLAUDE.md
-AGENT.md
-PLAN.md
-power_management_improvement.md

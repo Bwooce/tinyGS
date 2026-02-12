@@ -17,9 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "OLEDDisplay.h"
-#include "SSD1306Wire.h"
-#include "SH1106Wire.h"
+#include "SSD1306.h"                         // https://github.com/ThingPulse/esp8266-oled-ssd1306
 #include "OLEDDisplayUi.h"                   // https://github.com/ThingPulse/esp8266-oled-ssd1306
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
@@ -32,9 +30,7 @@ void displayShowStaMode(bool ap);
 void displayUpdate();
 void displayTurnOff();
 void displayNextFrame();
-void displayResetTimeout();
 
 extern Status status;
-extern OLEDDisplay* display;
 
   
