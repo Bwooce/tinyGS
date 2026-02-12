@@ -23,8 +23,12 @@
 #include "../Mqtt/MQTT_credentials.h"
 #include "../Logger/Logger.h"
 
-SSD1306* display;
+OLEDDisplay* display;
 OLEDDisplayUi* ui = NULL;
+
+#define DISPLAY_TIMEOUT 300000  // 5 minutes
+static unsigned long lastDisplayActivity = 0;
+static bool displayTimedOut = false;
 
 void msOverlay(OLEDDisplay *display, OLEDDisplayUiState* state);
 void drawFrame1(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
@@ -55,8 +59,15 @@ void displayInit()
    if (!ConfigManager::getInstance().getBoardConfig(board))
     return;
   
-  display = new SSD1306(board.OLED__address, board.OLED__SDA, board.OLED__SCL);
+  uint8_t boardIdx = ConfigManager::getInstance().getBoard();
+  if (boardIdx == LILYGO_TBEAM_SUPREME) {
+      Log::console(PSTR("Display: Initializing SH1106 for T-Beam Supreme"));
+      display = new SH1106Wire(board.OLED__address, board.OLED__SDA, board.OLED__SCL);
+  } else {
+      display = new SSD1306Wire(board.OLED__address, board.OLED__SDA, board.OLED__SCL);
+  }
 
+  lastDisplayActivity = millis();
   ui = new OLEDDisplayUi(display);
   ui->setTargetFPS(60);
   ui->setActiveSymbol(activeSymbol);
@@ -355,6 +366,15 @@ void displayUpdate()
   // Get the current OLED brightness from configuration
   uint8_t oledBright = ConfigManager::getInstance().getOledBright();
 
+  // Check display timeout
+  if (oledBright && !displayTimedOut && (millis() - lastDisplayActivity > DISPLAY_TIMEOUT)) {
+    displayTimedOut = true;
+    display->displayOff();
+    return;
+  }
+
+  if (displayTimedOut) return;
+
   // Check if brightness has changed
   if (oldOledBright != oledBright) {
     if (oledBright) {
@@ -371,6 +391,16 @@ void displayUpdate()
   if (oledBright) {
     // Update the UI if screen is on
     ui->update();
+  }
+}
+
+void displayResetTimeout()
+{
+  lastDisplayActivity = millis();
+  if (displayTimedOut) {
+    displayTimedOut = false;
+    display->displayOn();
+    oldOledBright = -1; // force brightness reapply
   }
 }
 
