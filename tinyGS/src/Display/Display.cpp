@@ -22,6 +22,7 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Mqtt/MQTT_credentials.h"
 #include "../Logger/Logger.h"
+#include "../GnssManager/GnssManager.h"
 
 OLEDDisplay* display;
 OLEDDisplayUi* ui = NULL;
@@ -304,7 +305,20 @@ void drawFrame8(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int1
   display->drawString(x+2, 16+y, "MQTT:" );
   if (status.mqtt_connected) { display->drawString( x+7,  26+y, "ON"); }  else { display->drawString( x+5,  26+y, "OFF"); }
   display->drawXbm(x + 32, y + 4, WiFi_Logo_width, WiFi_Logo_height, WiFi_Logo_bits);
-  // The coordinates define the center of the text
+
+  GnssManager& gnss = GnssManager::getInstance();
+  if (gnss.isEnabled()) {
+    display->setTextAlignment(TEXT_ALIGN_RIGHT);
+    display->drawString(128 + x, 16 + y, "GNSS:");
+    if (gnss.isSleeping()) display->drawString(128 + x, 26 + y, "SLEEP");
+    else if (gnss.hasFix()) {
+      char gnsBuf[12];
+      snprintf(gnsBuf, sizeof(gnsBuf), "FIX(%lu)", (unsigned long)gnss.getSatellites());
+      display->drawString(128 + x, 26 + y, gnsBuf);
+    }
+    else display->drawString(128 + x, 26 + y, "NO FIX");
+  }
+
   display->setTextAlignment(TEXT_ALIGN_CENTER);
   display->drawString(64 + x, 42 + y, "Connected " + (WiFi.localIP().toString()));
 }  
