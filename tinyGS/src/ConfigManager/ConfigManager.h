@@ -227,6 +227,12 @@ public:
     strcpy(longitude, buffer);
     this->saveConfig();
   }
+  // Runtime-only lat/lon setters (no flash write)
+  void setLatRuntime(double lat) { snprintf(latitude, COORDINATE_LENGTH, "%.3f", lat); }
+  void setLonRuntime(double lon) { snprintf(longitude, COORDINATE_LENGTH, "%.3f", lon); }
+  bool getAutoLocation() { return !strcmp(autoLocation, CB_SELECTED_STR); }
+  unsigned long getGnssInterval();
+
   void setName(const char *buffer)
   {
     strncpy(getThingNameParameter()->valueBuffer, buffer, IOTWEBCONF_WORD_LEN);
@@ -343,6 +349,8 @@ private:
   char boardTemplate[TEMPLATE_LEN] = "";
   char modemStartup[MODEM_LEN] = "";
   char advancedConfig[ADVANCED_LEN] = "";
+  char autoLocation[CHECKBOX_LENGTH] = "";
+  char gnssInterval[NUMBER_LEN] = "";
   bool askForWeblogin = false;
 
   //iotwebconf2::NumberParameter latitudeParam = iotwebconf2::NumberParameter("Latitude (3 decimals, will be public)", "lat", latitude, COORDINATE_LENGTH, NULL, "0.000", "required min='-180' max='180' step='0.001'");
@@ -363,6 +371,8 @@ private:
   iotwebconf2::CheckboxParameter telemetry3rdParam = iotwebconf2::CheckboxParameter("Allow sending telemetry to third party", "telemetry3rd", telemetry3rd, CHECKBOX_LENGTH, true);
   iotwebconf2::CheckboxParameter testParam = iotwebconf2::CheckboxParameter("Test mode", "test", testMode, CHECKBOX_LENGTH, false);
   iotwebconf2::CheckboxParameter autoUpdateParam = iotwebconf2::CheckboxParameter("Automatic Firmware Update", "auto_update", autoUpdate, CHECKBOX_LENGTH, true);
+  iotwebconf2::CheckboxParameter autoLocationParam = iotwebconf2::CheckboxParameter("Auto Location (GNSS)", "auto_loc", autoLocation, CHECKBOX_LENGTH, false);
+  iotwebconf2::NumberParameter gnssIntervalParam = iotwebconf2::NumberParameter("GNSS Update Interval (seconds, 0=always on)", "gnss_interval", gnssInterval, NUMBER_LEN, "3600", "0..86400", "min='0' max='86400' step='1'");
 
   iotwebconf2::ParameterGroup groupAdvanced = iotwebconf2::ParameterGroup("Advanced config", "Advanced Config (do not modify unless you know what you are doing)");
   iotwebconf2::TextParameter boardTemplateParam = iotwebconf2::TextParameter("Board Template (requires manual restart)", "board_template", boardTemplate, TEMPLATE_LEN, NULL, NULL, "type=\"text\" maxlength=255");

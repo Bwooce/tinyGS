@@ -127,6 +127,8 @@ ConfigManager::ConfigManager()
   groupBoardConfig.addItem(&telemetry3rdParam);
   groupBoardConfig.addItem(&testParam);
   groupBoardConfig.addItem(&autoUpdateParam);
+  groupBoardConfig.addItem(&autoLocationParam);
+  groupBoardConfig.addItem(&gnssIntervalParam);
   addParameterGroup(&groupBoardConfig);
 
   groupAdvanced.addItem(&boardTemplateParam);
@@ -646,6 +648,8 @@ void ConfigManager::resetAllConfig()
   boardTemplate[0] = '\0';
   modemStartup[0] = '\0';
   advancedConfig[0] = '\0';
+  autoLocation[0] = '\0';
+  gnssInterval[0] = '\0';
 
   saveConfig();
 }
@@ -757,6 +761,14 @@ void ConfigManager::boardDetection()
       }
     };
 #endif
+}
+
+unsigned long ConfigManager::getGnssInterval() {
+    if (gnssInterval[0] == '\0') return 3600; // default 1 hour
+    long val = atol(gnssInterval);
+    if (val < 0) return 0;
+    if (val > 86400) return 86400;
+    return (unsigned long)val;
 }
 
 void ConfigManager::printConfig()
