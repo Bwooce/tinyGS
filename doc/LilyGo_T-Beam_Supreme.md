@@ -42,12 +42,20 @@ The LilyGo T-Beam Supreme is an ESP32-S3 based board with an SX1262 LoRa radio, 
 - **GPS Rail (ALDO4)**: Powers the GNSS module independently.
 - **Unused Rails**: Unused PMU rails (ALDO2, BLDO1/2, DLDO1/2) are explicitly disabled to minimize quiescent current.
 
+### 4. GNSS Auto-Location
+- Automatic time sync from GPS (no NTP dependency for initial time).
+- Optional auto-location: enable "Auto Location (GNSS)" in config to update station coordinates from GPS fix.
+- Configurable update interval (default 3600s). Set to 0 for continuous updates.
+- Power-managed: GNSS module powers down between updates to save battery.
+- Legacy mode (auto-location off): only sets coordinates once if station is at 0.0/0.0.
+
 ## Configuration
 
 1. Connect to the TinyGS Access Point.
 2. Navigate to `http://192.168.4.1/config`.
 3. Select **433 Mhz LilyGo T-Beam Supreme** as the board type.
-4. Save and Restart.
+4. (Optional) Enable **Auto Location (GNSS)** and set the update interval.
+5. Save and Restart.
 
 ## Troubleshooting
 
