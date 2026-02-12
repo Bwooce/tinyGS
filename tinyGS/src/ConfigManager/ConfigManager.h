@@ -69,6 +69,14 @@ constexpr auto configVersion = "0.05"; //max 4 chars
 #define MQTT_DEFAULT_SERVER "mqtt.tinygs.com"
 #define MQTT_DEFAULT_PORT "8883"
 
+// T-Beam Supreme specific pins (Wire1 for PMU, separate from OLED Wire bus)
+#define SUPREME_GNSS_RX 9
+#define SUPREME_GNSS_TX 8
+#define SUPREME_GNSS_WAKEUP 7
+#define SUPREME_PMU_SDA 42
+#define SUPREME_PMU_SCL 41
+#define SUPREME_LED 3
+
 constexpr auto AP_TIMEOUT_MS = "300000";
 
 enum boardNum
@@ -78,6 +86,7 @@ enum boardNum
   ESP32S3_SX1278_LF,
   TTGO_TBEAM_SX1262,
   LILYGO_T3S3_SX1280,
+  LILYGO_TBEAM_SUPREME,
  #elif CONFIG_IDF_TARGET_ESP32C3
   HELTEC_LORA32_HTCT62 = 0,
   ESP32C3_SX1278_LF,
@@ -129,6 +138,9 @@ typedef struct
   float L_TCXO_V;
   uint8_t RX_EN;
   uint8_t TX_EN;
+  uint8_t GNSS_RX;
+  uint8_t GNSS_TX;
+  uint8_t GNSS_WAKEUP;
   String BOARD;
 } board_t;
 
