@@ -27,6 +27,7 @@
 #include "../OTA/OTA.h"
 #include "../Logger/Logger.h"
 #include "../Power/Power.h"
+#include "../GnssManager/GnssManager.h"
 #include <esp_ota_ops.h>
 
 
@@ -234,6 +235,8 @@ void MQTT_Client::sendWelcome()
   JsonArray station_location = doc.createNestedArray("station_location");
   station_location.add(configManager.getLatitude());
   station_location.add(configManager.getLongitude());
+  if (GnssManager::getInstance().hasFix())
+    doc["alt"] = GnssManager::getInstance().getAltitude();
   doc["tx"] = configManager.getAllowTx();
   doc["time"] = now;
   doc["version"] = status.version;
@@ -496,6 +499,8 @@ void MQTT_Client::sendStatus()
   JsonArray station_location = doc.createNestedArray("station_location");
   station_location.add(configManager.getLatitude());
   station_location.add(configManager.getLongitude());
+  if (GnssManager::getInstance().hasFix())
+    doc["alt"] = GnssManager::getInstance().getAltitude();
 
   doc["version"] = status.version;
   doc["board"] = configManager.getBoard();

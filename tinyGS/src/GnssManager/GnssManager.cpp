@@ -18,6 +18,9 @@
 */
 
 #include "GnssManager.h"
+
+#ifdef HAS_GNSS
+
 #include "../Logger/Logger.h"
 #include <time.h>
 #include <sys/time.h>
@@ -232,3 +235,5 @@ void GnssManager::syncTime() {
 bool GnssManager::isSleeping() {
     return enabled && !powered;
 }
+
+#endif // HAS_GNSS

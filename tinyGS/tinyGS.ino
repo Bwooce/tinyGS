@@ -81,6 +81,7 @@
 #include "src/Mqtt/MQTT_credentials.h"
 #include "src/Improv/tinygs_improv.h"
 #include "src/Power/Power.h"
+#include "src/GnssManager/GnssManager.h"
 
 #if  RADIOLIB_VERSION_MAJOR != (0x07) || RADIOLIB_VERSION_MINOR != (0x05) || RADIOLIB_VERSION_PATCH != (0x00) || RADIOLIB_VERSION_EXTRA != (0x00)
 #error "You are not using the correct version of RadioLib please copy TinyGS/lib/RadioLib on Arduino/libraries"
@@ -114,6 +115,7 @@ void configured()
   configManager.setConfiguredCallback(NULL);
   configManager.printConfig();
   Power::getInstance().checkAXP();
+  GnssManager::getInstance().begin();
   radio.init();
 }
 
@@ -291,6 +293,8 @@ void loop() {
     return;
   }
 
+  GnssManager::getInstance().loop();
+
   ArduinoOTA.handle();
   handleSerial();
 
@@ -326,6 +330,11 @@ void loop() {
 
   mqtt.loop();
   OTA::loop();
+
+  if (GnssManager::getInstance().isLocationUpdated() && mqtt.connected()) {
+    mqtt.sendStatus();
+    GnssManager::getInstance().clearLocationUpdated();
+  }
 
   displayUpdate ();
 

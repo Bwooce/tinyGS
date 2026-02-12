@@ -19,6 +19,8 @@
 #ifndef GnssManager_h
 #define GnssManager_h
 
+#ifdef HAS_GNSS
+
 #include <TinyGPS++.h>
 #include <HardwareSerial.h>
 #include "../ConfigManager/ConfigManager.h"
@@ -59,4 +61,25 @@ private:
     unsigned long powerOnTime;
 };
 
+#else
+
+// Stub for builds without GNSS hardware (TinyGPSPlus not available)
+class GnssManager {
+public:
+    static GnssManager& getInstance() { static GnssManager instance; return instance; }
+    void begin() {}
+    void loop() {}
+    bool hasFix() { return false; }
+    uint32_t getSatellites() { return 0; }
+    double getLatitude() { return 0.0; }
+    double getLongitude() { return 0.0; }
+    double getAltitude() { return 0.0; }
+    void syncTime() {}
+    bool isEnabled() { return false; }
+    bool isSleeping() { return false; }
+    bool isLocationUpdated() { return false; }
+    void clearLocationUpdated() {}
+};
+
+#endif
 #endif
