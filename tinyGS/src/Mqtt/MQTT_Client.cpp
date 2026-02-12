@@ -26,7 +26,6 @@
 #include "../Radio/Radio.h"
 #include "../OTA/OTA.h"
 #include "../Logger/Logger.h"
-#include "../GnssManager/GnssManager.h"
 #include <esp_ota_ops.h>
 
 
@@ -325,13 +324,8 @@ void MQTT_Client::sendRx(String packet, bool noisy, String raw_packet)
   }
   
   serializeJson(doc, buffer, bufferSize);
-  Log::debugAsync(PSTR("MQTT Publish Payload: %s"), buffer);
-  
-  if (publish(buildTopic(teleTopic, topicRx).c_str(), buffer, false)) {
-      Log::consoleAsync(PSTR("MQTT: Packet uploaded successfully!"));
-  } else {
-      Log::consoleAsync(PSTR("MQTT: Packet upload FAILED!"));
-  }
+  Log::debugAsync(PSTR("%s"), buffer);
+  publish(buildTopic(teleTopic, topicRx).c_str(), buffer, false);
   
   free(buffer);
 }
@@ -394,13 +388,8 @@ void MQTT_Client::sendRxFromQueue(const RxPacketMessage& msg)
   }
   
   serializeJson(doc, buffer, bufferSize);
-  Log::debugAsync(PSTR("MQTT Queue Payload: %s"), buffer);
-  
-  if (publish(buildTopic(teleTopic, topicRx).c_str(), buffer, false)) {
-      Log::consoleAsync(PSTR("MQTT: Queued Packet uploaded successfully!"));
-  } else {
-      Log::consoleAsync(PSTR("MQTT: Queued Packet upload FAILED!"));
-  }
+  Log::debugAsync(PSTR("%s"), buffer);
+  publish(buildTopic(teleTopic, topicRx).c_str(), buffer, false);
   
   free(buffer);
 }
@@ -506,11 +495,6 @@ void MQTT_Client::sendStatus()
   JsonArray station_location = doc.createNestedArray("station_location");
   station_location.add(configManager.getLatitude());
   station_location.add(configManager.getLongitude());
-  
-  // Add Altitude if available (GnssManager)
-  if (GnssManager::getInstance().hasFix() || GnssManager::getInstance().getAltitude() != 0) {
-      station_location.add(GnssManager::getInstance().getAltitude());
-  }
 
   doc["version"] = status.version;
   doc["board"] = configManager.getBoard();
@@ -1190,6 +1174,33 @@ void MQTT_Client::begin()
 
 
 int MQTT_Client::voltage() {
-  return (int)Power::getInstance().getBatteryVoltage();
+  int medianVoltage;
+  int length = 21;
+  int voltages[22];
+  
+  for (int i = 0; i < 21; i++)
+  {
+    voltages[i] = analogRead(36); 
+    }
+  
+  //    BubbleSortAsc   from https://www.luisllamas.es/arduino-bubble-sort/
+   int i, j, flag = 1;
+   int temp;
+   for (i = 1; (i <= length) && flag; i++)
+   {
+      flag = 0;
+      for (j = 0; j < (length - 1); j++)
+      {
+         if (voltages[j + 1] < voltages[j])
+         {
+            temp = voltages[j];
+            voltages[j] = voltages[j + 1];
+            voltages[j + 1] = temp;
+            flag = 1;
+         }
+      }
+   }
+  medianVoltage = voltages[10];
+  return medianVoltage;
 }
 
