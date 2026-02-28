@@ -185,6 +185,7 @@ public:
   const char *getTZ() { return strlen(tz) > 3 ? tz + 3 : "GMT0"; } // +3 removes the first 3 digits used for time zone deduplication
   uint8_t getBoard() { return atoi(board); }
   uint8_t getOledBright() { return atoi(oledBright); }
+  uint8_t getBatteryPack() { uint8_t v = atoi(batteryPack); return (v >= 1 && v <= 3) ? v : 1; }
   bool getAllowTx() { return !strcmp(allowTx, CB_SELECTED_STR); }
   void setAllowTx(bool status)
   {
@@ -344,6 +345,7 @@ private:
   char mqttPass[MQTT_PASS_LENGTH] = "";
   char board[BOARD_LENGTH] = "";
   char oledBright[NUMBER_LEN] = "";
+  char batteryPack[BATTERY_LENGTH] = "";
   char allowTx[CHECKBOX_LENGTH] = "";
   char remoteTune[CHECKBOX_LENGTH] = "";
   char telemetry3rd[CHECKBOX_LENGTH] = "";
@@ -367,6 +369,7 @@ private:
   iotwebconf2::ParameterGroup groupBoardConfig = iotwebconf2::ParameterGroup("Board config", "Board config");
   iotwebconf2::SelectParameter boardParam = iotwebconf2::SelectParameter("Board type", "board", board, BOARD_LENGTH, (char *)BOARD_VALUES, (char *)BOARD_NAMES, sizeof(BOARD_VALUES) / BOARD_LENGTH, BOARD_NAME_LENGTH);
   iotwebconf2::NumberParameter oledBrightParam = iotwebconf2::NumberParameter("OLED Bright", "oled_bright", oledBright, NUMBER_LEN, "100", "0..100", "min='0' max='100' step='1'");
+  iotwebconf2::SelectParameter batteryPackParam = iotwebconf2::SelectParameter("Battery Pack (restart to apply)", "bat_pack", batteryPack, BATTERY_LENGTH, (char *)BATTERY_VALUES, (char *)BATTERY_NAMES, sizeof(BATTERY_VALUES) / BATTERY_LENGTH, BATTERY_NAME_LENGTH);
   iotwebconf2::CheckboxParameter AllowTxParam = iotwebconf2::CheckboxParameter("Enable TX (HAM licence/ no preamp)", "tx", allowTx, CHECKBOX_LENGTH, true);
   iotwebconf2::CheckboxParameter remoteTuneParam = iotwebconf2::CheckboxParameter("Allow Automatic Tuning", "remote_tune", remoteTune, CHECKBOX_LENGTH, true);
   iotwebconf2::CheckboxParameter telemetry3rdParam = iotwebconf2::CheckboxParameter("Allow sending telemetry to third party", "telemetry3rd", telemetry3rd, CHECKBOX_LENGTH, true);

@@ -24,6 +24,7 @@
 #include "../Display/graphics.h"
 #include "../Mqtt/MQTT_credentials.h"
 #include "ArduinoJson.h"
+#include "../Power/Power.h"
 #if ARDUINOJSON_USE_LONG_LONG == 0 && !PLATFORMIO
 #error "Using Arduino IDE is not recommended, please follow this guide https://github.com/G4lile0/tinyGS/wiki/Arduino-IDE or edit /ArduinoJson/src/ArduinoJson/Configuration.hpp and amend to #define ARDUINOJSON_USE_LONG_LONG 1 around line 68"
 #endif
@@ -124,6 +125,7 @@ ConfigManager::ConfigManager()
 
   groupBoardConfig.addItem(&boardParam);
   groupBoardConfig.addItem(&oledBrightParam);
+  groupBoardConfig.addItem(&batteryPackParam);
   groupBoardConfig.addItem(&AllowTxParam);
   groupBoardConfig.addItem(&remoteTuneParam);
   groupBoardConfig.addItem(&telemetry3rdParam);
@@ -263,7 +265,15 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>MQTT Server </td><td>" + String(status.mqtt_connected ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + "</td></tr>";
   s += "<tr><td>WiFi RSSI </td><td>" + String(WiFi.isConnected() ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + "</td></tr>";
   s += "<tr><td>Radio </td><td>" + String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + "</td></tr>";
-  s += "<tr><td>Noise floor </td><td>" + String(status.modeminfo.currentRssi) + "</td></tr>"; 
+  s += "<tr><td>Noise floor </td><td>" + String(status.modeminfo.currentRssi) + "</td></tr>";
+  {
+    Power& pmu = Power::getInstance();
+    if (pmu.getAXPchip() > 0) {
+      s += "<tr><td>Battery </td><td>" + String(pmu.getBatteryVoltage(), 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + "</td></tr>";
+    } else {
+      s += "<tr><td>Battery </td><td>-</td></tr>";
+    }
+  }
   s += F("</table></div>");
 
 
@@ -516,7 +526,16 @@ void ConfigManager::handleRefreshWorldmap()
     radio.currentRssi ();
   data_string += String(status.modeminfo.currentRssi) + ",";
 
- 
+  // Battery status
+  {
+    Power& pmu = Power::getInstance();
+    if (pmu.getAXPchip() > 0) {
+      data_string += String(pmu.getBatteryVoltage(), 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + ",";
+    } else {
+      data_string += "-,";
+    }
+  }
+
    // sat_info
    char timeStr[10];  // "13:45:21 "
    time_t currentTime = time (NULL);
@@ -662,6 +681,7 @@ void ConfigManager::resetAllConfig()
   latitude[0] = '\0';
   longitude[0] = '\0';
   //oledBright[0] = '\0'; // Disabled to avoid turining display off
+  batteryPack[0] = '\0';
   allowTx[0] = '\0';
   remoteTune[0] = '\0';
   telemetry3rd[0] = '\0';

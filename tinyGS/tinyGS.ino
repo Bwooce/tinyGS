@@ -328,6 +328,7 @@ void loop() {
   OTA::loop();
 
   displayUpdate ();
+  Power::getInstance().checkPmuStatus();
 
   if (configManager.askedWebLogin () && mqtt.connected ())
   {

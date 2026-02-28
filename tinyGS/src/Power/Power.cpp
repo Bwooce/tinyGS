@@ -98,7 +98,26 @@ void Power::checkAXP()
     I2CwriteByte(0x34, 0x84, 0b11000010); // Set ADC sample rate to 200hz, TS pin control 20uA
     I2CwriteByte(0x34, 0x82, 0xFF);       // |Set ADC to|
     I2CwriteByte(0x34, 0x83, 0x80);       // |All Enable|
-    I2CwriteByte(0x34, 0x33, 0xC3);       // Bat charge voltage to 4.2, Current 360MA and 10% for stop charging
+    // Battery pack dependent charge config (reg 0x33 bit7=enable, bits[6:5]=4.2V target, bits[3:0]=current)
+    {
+      uint8_t bp = ConfigManager::getInstance().getBatteryPack();
+      switch (bp) {
+        case 2:
+          I2CwriteByte(0x34, AXP192_CHARGE1, 0xC7); // 4.2V, 700mA
+          I2CwriteByte(0x34, AXP192_CHARGE2, 0x83); // precharge 50m, CC timeout 10h
+          Log::console(PSTR("PMU: Battery 2P config - 700mA charge, 10h/50m timeouts"));
+          break;
+        case 3:
+          I2CwriteByte(0x34, AXP192_CHARGE1, 0xCB); // 4.2V, 1000mA
+          I2CwriteByte(0x34, AXP192_CHARGE2, 0xC3); // precharge 60m, CC timeout 10h
+          Log::console(PSTR("PMU: Battery 3P config - 1000mA charge, 10h/60m timeouts"));
+          break;
+        default: // 1P
+          I2CwriteByte(0x34, AXP192_CHARGE1, 0xC3); // 4.2V, 360mA, 10% termination
+          Log::console(PSTR("PMU: Battery 1P config - 360mA charge, default timeouts"));
+          break;
+      }
+    }
     I2CwriteByte(0x34, 0x36, 0x0C);       // 128ms power on, 4s power off, 1s Long key press
     I2CwriteByte(0x34, 0x30, 0x80);       // Disable VBUS limits
     I2CwriteByte(0x34, 0x39, 0xFC);       // Set TS protection to 3.2256v -> disable
@@ -122,9 +141,32 @@ void Power::checkAXP()
       I2CwriteByte(0x34, 0x95, 0x1C);       // set ALDO4 voltage to 3.3V (GPS)
       I2CwriteByte(0x34, 0x6A, 0x04);       // set Button battery voltage to 3.0V
       I2CwriteByte(0x34, 0x64, 0x03);       // set Main battery voltage to 4.2V
-      I2CwriteByte(0x34, 0x61, 0x05);       // set Main battery precharge current to 125mA
-      I2CwriteByte(0x34, 0x62, 0x0A);       // set Main battery charger current to 400mA
       I2CwriteByte(0x34, 0x63, 0x15);       // set Main battery term charge current to 125mA
+
+      // Battery pack dependent charge config
+      {
+        uint8_t bp = ConfigManager::getInstance().getBatteryPack();
+        switch (bp) {
+          case 2:
+            I2CwriteByte(0x34, 0x61, 0x06);               // precharge 150mA
+            I2CwriteByte(0x34, AXP2101_ICC_CHG_SET, 0x0E); // charge current 800mA
+            I2CwriteByte(0x34, AXP2101_CHG_TIMEOUT_CTRL, 0xF6); // slow_DPM, 20h CC, 60m pre
+            Log::console(PSTR("PMU: Battery 2P config - 800mA charge, 20h/60m timeouts"));
+            break;
+          case 3:
+            I2CwriteByte(0x34, 0x61, 0x07);               // precharge 175mA
+            I2CwriteByte(0x34, AXP2101_ICC_CHG_SET, 0x10); // charge current 1000mA
+            I2CwriteByte(0x34, AXP2101_CHG_TIMEOUT_CTRL, 0xF7); // slow_DPM, 20h CC, 70m pre
+            Log::console(PSTR("PMU: Battery 3P config - 1000mA charge, 20h/70m timeouts"));
+            break;
+          default: // 1P
+            I2CwriteByte(0x34, 0x61, 0x05);               // precharge 125mA
+            I2CwriteByte(0x34, AXP2101_ICC_CHG_SET, 0x0A); // charge current 400mA
+            I2CwriteByte(0x34, AXP2101_CHG_TIMEOUT_CTRL, 0xE5); // slow_DPM, 12h CC, 50m pre
+            Log::console(PSTR("PMU: Battery 1P config - 400mA charge, 12h/50m timeouts"));
+            break;
+        }
+      }
 
       // Disable unused rails to minimize quiescent current
       I2CwriteByte(0x34, 0x91, 0x00);       // Disable BLDO1, BLDO2, DLDO1, DLDO2
@@ -141,9 +183,32 @@ void Power::checkAXP()
       I2CwriteByte(0x34, 0x94, 0x1C);       // set ALDO3 voltage to 3.3V (GPS VDD)
       I2CwriteByte(0x34, 0x6A, 0x04);       // set Button battery voltage to 3.0V
       I2CwriteByte(0x34, 0x64, 0x03);       // set Main battery voltage to 4.2V
-      I2CwriteByte(0x34, 0x61, 0x05);       // set Main battery precharge current to 125mA
-      I2CwriteByte(0x34, 0x62, 0x0A);       // set Main battery charger current to 400mA
       I2CwriteByte(0x34, 0x63, 0x15);       // set Main battery term charge current to 125mA
+
+      // Battery pack dependent charge config
+      {
+        uint8_t bp = ConfigManager::getInstance().getBatteryPack();
+        switch (bp) {
+          case 2:
+            I2CwriteByte(0x34, 0x61, 0x06);               // precharge 150mA
+            I2CwriteByte(0x34, AXP2101_ICC_CHG_SET, 0x0E); // charge current 800mA
+            I2CwriteByte(0x34, AXP2101_CHG_TIMEOUT_CTRL, 0xF6); // slow_DPM, 20h CC, 60m pre
+            Log::console(PSTR("PMU: Battery 2P config - 800mA charge, 20h/60m timeouts"));
+            break;
+          case 3:
+            I2CwriteByte(0x34, 0x61, 0x07);               // precharge 175mA
+            I2CwriteByte(0x34, AXP2101_ICC_CHG_SET, 0x10); // charge current 1000mA
+            I2CwriteByte(0x34, AXP2101_CHG_TIMEOUT_CTRL, 0xF7); // slow_DPM, 20h CC, 70m pre
+            Log::console(PSTR("PMU: Battery 3P config - 1000mA charge, 20h/70m timeouts"));
+            break;
+          default: // 1P
+            I2CwriteByte(0x34, 0x61, 0x05);               // precharge 125mA
+            I2CwriteByte(0x34, AXP2101_ICC_CHG_SET, 0x0A); // charge current 400mA
+            I2CwriteByte(0x34, AXP2101_CHG_TIMEOUT_CTRL, 0xE5); // slow_DPM, 12h CC, 50m pre
+            Log::console(PSTR("PMU: Battery 1P config - 400mA charge, 12h/50m timeouts"));
+            break;
+        }
+      }
       regV = I2CreadByte(0x34, AXP2101_LDO_ONOFF_CTRL0);
       regV = regV | (1 << AXP2101_ALDO2_BIT) | (1 << AXP2101_ALDO3_BIT);
       I2CwriteByte(0x34, AXP2101_LDO_ONOFF_CTRL0, regV);
@@ -153,7 +218,7 @@ void Power::checkAXP()
     regV = regV | 0x06;                   // set bit 1 (Main Battery) and bit 2 (Button battery)
     I2CwriteByte(0x34, 0x18, regV);       // and chargers now enabled
     I2CwriteByte(0x34, 0x14, 0x30);       // set minimum system voltage to 4.4V (default 4.7V), for poor USB cables
-    I2CwriteByte(0x34, 0x15, 0x05);       // set input voltage limit to 4.28v, for poor USB cables
+    I2CwriteByte(0x34, 0x15, 0x05);       // set VBUS input current limit to 2000mA
     I2CwriteByte(0x34, 0x24, 0x06);       // set Vsys for PWROFF threshold to 3.2V (default - 2.6V and kill battery)
     I2CwriteByte(0x34, 0x50, 0x14);       // set TS pin to EXTERNAL input (not temperature)
     I2CwriteByte(0x34, 0x69, 0x01);       // set CHGLED for 'type A' and enable pin function
@@ -269,4 +334,84 @@ void Power::setGnssPower(bool on) {
 
     I2CwriteByte(0x34, AXP2101_LDO_ONOFF_CTRL0, regV);
     Log::console(PSTR("GNSS power %s"), on ? "ON" : "OFF");
+}
+
+uint8_t Power::getAXPchip() {
+    return AXPchip;
+}
+
+const char* Power::getChargeStateStr() {
+    if (AXPchip == 2) {
+        uint8_t status2 = I2CreadByte(0x34, AXP2101_STATUS2);
+        uint8_t chgState = status2 & 0x07;
+        switch (chgState) {
+          case 0: return "Idle";
+          case 1: return "Pre-charge";
+          case 2: return "CC charging";
+          case 3: return "CV charging";
+          case 4: return "Done";
+          default: return "Unknown";
+        }
+    } else if (AXPchip == 1) {
+        uint8_t status1 = I2CreadByte(0x34, AXP192_MODE_CHGSTATUS);
+        if (status1 & 0x40) return "Charging";
+        return "Not charging";
+    }
+    return "No PMU";
+}
+
+void Power::checkPmuStatus() {
+    if (AXPchip == 0) return;
+
+    unsigned long now = millis();
+    if (now - lastPmuCheck < 60000) return;
+    lastPmuCheck = now;
+
+    float vbat = getBatteryVoltage();
+    int pct = getBatteryPercentage();
+
+    if (AXPchip == 2) {
+        // AXP2101 charge state from STATUS2[2:0]
+        const char* stateStr = getChargeStateStr();
+        Log::debug(PSTR("PMU: %s, Vbat=%.2fV (%d%%)"), stateStr, vbat, pct);
+
+        // Read and clear IRQ status (write-1-to-clear)
+        uint8_t irq0 = I2CreadByte(0x34, AXP2101_IRQ_STATUS0);
+        uint8_t irq1 = I2CreadByte(0x34, AXP2101_IRQ_STATUS1);
+        uint8_t irq2 = I2CreadByte(0x34, AXP2101_IRQ_STATUS2);
+        if (irq0) I2CwriteByte(0x34, AXP2101_IRQ_STATUS0, irq0);
+        if (irq1) I2CwriteByte(0x34, AXP2101_IRQ_STATUS1, irq1);
+        if (irq2) I2CwriteByte(0x34, AXP2101_IRQ_STATUS2, irq2);
+
+        if (irq0 || irq1 || irq2) {
+            Log::console(PSTR("PMU IRQ: %02X,%02X,%02X"), irq0, irq1, irq2);
+        }
+        // IRQ2 (0x4A) bit 1 = charge safety timer expired
+        if (irq2 & 0x02) {
+            Log::console(PSTR("PMU WARNING: Charge safety timer expired - check battery pack config"));
+        }
+        // IRQ2 (0x4A) bit 4 = charge done
+        if (irq2 & 0x10) {
+            Log::console(PSTR("PMU: Charge complete"));
+        }
+    } else if (AXPchip == 1) {
+        // AXP192 charge state from reg 0x01
+        uint8_t chgStatus = I2CreadByte(0x34, AXP192_MODE_CHGSTATUS);
+        const char* stateStr = (chgStatus & 0x40) ? "Charging" : "Not charging";
+        Log::debug(PSTR("PMU: %s, Vbat=%.2fV (%d%%)"), stateStr, vbat, pct);
+
+        // Read and clear IRQ status
+        uint8_t irq1 = I2CreadByte(0x34, AXP192_IRQ_STATUS1);
+        uint8_t irq2 = I2CreadByte(0x34, AXP192_IRQ_STATUS2);
+        uint8_t irq3 = I2CreadByte(0x34, AXP192_IRQ_STATUS3);
+        uint8_t irq4 = I2CreadByte(0x34, AXP192_IRQ_STATUS4);
+        if (irq1) I2CwriteByte(0x34, AXP192_IRQ_STATUS1, irq1);
+        if (irq2) I2CwriteByte(0x34, AXP192_IRQ_STATUS2, irq2);
+        if (irq3) I2CwriteByte(0x34, AXP192_IRQ_STATUS3, irq3);
+        if (irq4) I2CwriteByte(0x34, AXP192_IRQ_STATUS4, irq4);
+
+        if (irq1 || irq2 || irq3 || irq4) {
+            Log::console(PSTR("PMU IRQ: %02X,%02X,%02X,%02X"), irq1, irq2, irq3, irq4);
+        }
+    }
 }
