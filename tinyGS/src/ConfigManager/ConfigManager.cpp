@@ -269,10 +269,10 @@ void ConfigManager::handleDashboard()
   if (battVol > 100) {
       pwrInfo = String(battVol/1000.0, 2) + "V (" + String(battPct) + "%)";
       if (battCur > 2 || battCur < -2) {
-          pwrInfo += (battCur > 0 ? " <span class='G'>UP</span> " : " <span class='R'>DN</span> ");
+          pwrInfo += (battCur > 0 ? " <span class='G'>&#9652;</span>" : " <span class='R'>&#9662;</span>");
           pwrInfo += String((int)abs(battCur)) + "mA";
       } else {
-          pwrInfo += charging ? " <span class='G'>UP</span> 0mA" : " -- 0mA";
+          pwrInfo += charging ? " <span class='G'>&#9652;</span>0mA" : " --0mA";
       }
   }
   s += "<tr><td>Power </td><td>" + pwrSrc + " " + pwrInfo + "</td></tr>";
