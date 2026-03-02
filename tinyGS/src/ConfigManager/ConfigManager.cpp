@@ -243,7 +243,7 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>Name </td><td>" + String(getThingName()) + "</td></tr>";
   s += "<tr><td>Version </td><td>" + String(status.version) + "</td></tr>";
   s += "<tr><td>MQTT Server </td><td>" + String(status.mqtt_connected ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + "</td></tr>";
-  s += "<tr><td>WiFi RSSI </td><td>" + String(WiFi.isConnected() ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + "</td></tr>";
+  s += "<tr><td>WiFi RSSI </td><td>" + (WiFi.isConnected() ? String(WiFi.RSSI()) + " dBm" : "<span class='R'>DISCONNECTED</span>") + "</td></tr>";
   s += "<tr><td>Radio </td><td>" + String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + "</td></tr>";
   
   if (!GnssManager::getInstance().isEnabled()) {
@@ -256,9 +256,21 @@ void ConfigManager::handleDashboard()
       s += "<tr><td>GNSS </td><td><span class='R'>NO FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span></td></tr>";
   }
 
-  float battVol = Power::getInstance().getBatteryVoltage();
-  int battPct = Power::getInstance().getBatteryPercentage();
-  s += "<tr><td>Battery </td><td>" + (battVol > 0 ? String(battVol/1000.0, 2) + "V (" + String(battPct) + "%)" : String(" - ")) + "</td></tr>";
+  Power& power = Power::getInstance();
+  float battVol = power.getBatteryVoltage();
+  int battPct = power.getBatteryPercentage();
+  float battCur = power.getBatteryCurrent();
+  bool charging = power.isCharging();
+  bool vbus = power.isVbusPresent();
+
+  s += "<tr><td>Power Source </td><td>" + String(vbus ? "USB / VBUS" : "Battery") + "</td></tr>";
+  if (vbus) {
+      s += "<tr><td>Charging </td><td>" + String(charging ? "<span class='G'>YES</span>" : "NO") + "</td></tr>";
+  }
+  s += "<tr><td>Battery </td><td>" + (battVol > 100 ? String(battVol/1000.0, 2) + "V (" + String(battPct) + "%)" : String(" - ")) + "</td></tr>";
+  if (battVol > 100) {
+      s += "<tr><td>Current </td><td>" + String(battCur, 1) + " mA (" + (battCur >= 0 ? "Charging" : "Discharging") + ")</td></tr>";
+  }
   
   s += F("</table></div>");
 
