@@ -17,53 +17,127 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#ifndef Power_h
+#define Power_h
 
-#ifndef POWER_H
-#define POWER_H
-#include "Arduino.h"
+#include <Arduino.h>
 #include <Wire.h>
-#include "../Status.h"
 #include "../ConfigManager/ConfigManager.h"
+#include "../Status.h"
 
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-// * * * * * * * A X P   C H I P   C O N F I G * * * * * * * * * *
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-#define AXP192_SLAVE_ADDRESS    (0x34) // I2C slaveaddress
-#define XPOWERS_AXP192_IC_TYPE  (0x03) // register address
-#define XPOWERS_AXP192_CHIP_ID  (0x03) // content
+#define XPOWERS_AXP192_CHIP_ID      0x03
+#define XPOWERS_AXP2101_CHIP_ID     0x4A
 
-#define AXP2101_SLAVE_ADDRESS   (0x34)
-#define XPOWERS_AXP2101_IC_TYPE (0x03)
-#define XPOWERS_AXP2101_CHIP_ID (0x4A)
+// AXP192/2101 Common Slave Address
+#define AXP_SLAVE_ADDRESS           0x34
 
-#define AXP216_SLAVE_ADDRESS    (0x34)
-#define XPOWERS_AXP216_IC_TYPE  (0x03)
-#define XPOWERS_AXP216_CHIP_ID  (0x41)
+// AXP192 Specific Registers
+#define AXP192_SLAVE_ADDRESS        0x34
+#define AXP192_STATUS               0x00
+#define AXP192_MODE_CHGSTATUS       0x01
+#define AXP192_CHIP_ID              0x03
+#define AXP192_LDO23_OUT_VOL        0x28
+#define AXP192_VBUS_VOL_LIMIT       0x30
+#define AXP192_CHGLED_CONTROL       0x32
+#define AXP192_BAT_CHG_DIG_VOL      0x33
+#define AXP192_PEK_SET              0x36
+#define AXP192_ADAPTER_OT_SET       0x39
+#define AXP192_IRQ_STATUS1          0x44
+#define AXP192_IRQ_STATUS2          0x45
+#define AXP192_IRQ_STATUS3          0x46
+#define AXP192_VBUS_VOL_H           0x5A
+#define AXP192_VBUS_VOL_L           0x5B
+#define AXP192_DIE_TEMP_H           0x5E
+#define AXP192_DIE_TEMP_L           0x5F
+#define AXP192_BAT_AVERVOL_H        0x78
+#define AXP192_BAT_AVERVOL_L        0x79
+#define AXP192_BAT_AVERCHGCUR_H     0x7A
+#define AXP192_BAT_AVERCHGCUR_L     0x7B
+#define AXP192_BAT_AVERDISCHGCUR_H  0x7C
+#define AXP192_BAT_AVERDISCHGCUR_L  0x7D
+#define AXP192_ADC_EN1              0x82
+#define AXP192_ADC_EN2              0x83
+#define AXP192_ADC_SPEED            0x84
 
-#define AXP202_SLAVE_ADDRESS    (0x35)
-#define XPOWERS_AXP202_IC_TYPE  (0x03)
-#define XPOWERS_AXP202_CHIP_ID  (0x41)
+// AXP192 Bitmasks and Shifts
+#define AXP192_VBUS_VOL_MSB_SHIFT   4
+#define AXP192_VBUS_VOL_LSB_MASK    0x0F
+#define AXP192_VBUS_VOL_STEP        1.7f
+#define AXP192_BAT_VOL_MSB_SHIFT    4
+#define AXP192_BAT_VOL_LSB_MASK     0x0F
+#define AXP192_BAT_VOL_STEP         1.1f
+#define AXP192_BAT_CUR_MSB_SHIFT    5
+#define AXP192_BAT_CUR_LSB_MASK     0x1F
+#define AXP192_BAT_CUR_STEP         0.5f
 
-// AXP2101 Registers and Bits
-#define AXP2101_LDO_ONOFF_CTRL0     0x90
-#define AXP2101_ALDO1_BIT           0
-#define AXP2101_ALDO2_BIT           1
-#define AXP2101_ALDO3_BIT           2
-#define AXP2101_ALDO4_BIT           3
+// AXP2101 Specific Registers
+#define AXP2101_SLAVE_ADDRESS       0x34
+#define AXP2101_STATUS1             0x00
+#define AXP2101_STATUS2             0x01
+#define AXP2101_IC_TYPE             0x03
+#define AXP2101_DATA_BUFFER0        0x04
+#define AXP2101_COMMON_CONFIG       0x10
+#define AXP2101_BAT_V_LIMIT         0x14
+#define AXP2101_VBUS_V_LIMIT        0x15
+#define AXP2101_CHG_GAUGE_WDT_CTRL  0x18
+#define AXP2101_PWRON_STATUS        0x20
+#define AXP2101_PWROFF_STATUS       0x21
+#define AXP2101_VOFF_SET            0x24
+#define AXP2101_PWROK_SET           0x25
+#define AXP2101_PWROK_DLY           0x26
+#define AXP2101_PEK_SET             0x27
+#define AXP2101_ADC_CONFIG          0x30
 #define AXP2101_BATTERY_VOLT_H      0x34
 #define AXP2101_BATTERY_VOLT_L      0x35
 #define AXP2101_VBUS_VOLT_H         0x38
 #define AXP2101_VBUS_VOLT_L         0x39
-#define AXP2101_BATT_CHG_CUR_H      0x3C
-#define AXP2101_BATT_CHG_CUR_L      0x3D
-#define AXP2101_BATT_DISCHG_CUR_H   0x3E
-#define AXP2101_BATT_DISCHG_CUR_L   0x3F
+#define AXP2101_DIE_TEMP_H          0x3C
+#define AXP2101_DIE_TEMP_L          0x3D
+#define AXP2101_IRQ_STATUS0         0x48
+#define AXP2101_IRQ_STATUS1         0x49
+#define AXP2101_IRQ_STATUS2         0x4A
+#define AXP2101_TS_PIN_CTRL         0x50
+#define AXP2101_IPRECHG             0x61
+#define AXP2101_ICC                 0x62
+#define AXP2101_ITERM               0x63
+#define AXP2101_CV_VOLT             0x64
+#define AXP2101_CHGLED_SET          0x69
+#define AXP2101_BAT_CHG_BACKUP      0x6A
+#define AXP2101_LDO_ONOFF_CTRL0     0x90
+#define AXP2101_LDO_ONOFF_CTRL1     0x91
+#define AXP2101_ALDO1_VOLT          0x92
+#define AXP2101_ALDO2_VOLT          0x93
+#define AXP2101_ALDO3_VOLT          0x94
+#define AXP2101_ALDO4_VOLT          0x95
 #define AXP2101_FUEL_GAUGE          0xA4
+#define AXP2101_BATT_CUR_H          0xA5
+#define AXP2101_BATT_CUR_L          0xA6
 
-#define AXP2101_BATT_VOLT_MASK      0xFF
-#define AXP2101_BATT_VOLT_SHIFT     8
-#define AXP2101_VBUS_VOLT_MASK      0xFF
-#define AXP2101_VBUS_VOLT_SHIFT     8
+// AXP2101 Bitmasks and Shifts
+#define AXP2101_ALDO1_BIT           0
+#define AXP2101_ALDO2_BIT           1
+#define AXP2101_ALDO3_BIT           2
+#define AXP2101_ALDO4_BIT           3
+#define AXP2101_VBUS_PRESENT_BIT    5
+#define AXP2101_CHG_STATUS_MASK     0x07
+#define AXP2101_VOLT_MSB_SHIFT      8
+#define AXP2101_CUR_MSB_SHIFT       8
+#define AXP2101_DIE_TEMP_MSB_MASK   0x3F
+
+struct PmuData {
+    float battVol;
+    float vbusVol;
+    float battCur;
+    float dieTemp;
+    int battPct;
+    bool vbusPresent;
+    bool charging;
+    uint8_t irqs[3];
+    uint16_t raw_battVol;
+    uint16_t raw_vbusVol;
+    uint16_t raw_battCur;
+    uint16_t raw_dieTemp;
+};
 
 extern Status status;
 
@@ -81,7 +155,8 @@ public:
      bool isVbusPresent();
      bool isCharging();
      float getBatteryCurrent();
-     void getRawPowerData(uint8_t* buf);
+     float getDieTemperature();
+     void getPmuData(PmuData* data);
      void getIRQStatus(uint8_t* irqs);
      void clearIRQ();
      void setGnssPower(bool on);

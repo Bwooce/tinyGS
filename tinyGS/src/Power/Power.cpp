@@ -85,25 +85,28 @@ void Power::checkAXP()
       pmuWire = &Wire;
   }
   
-  byte ChipID = I2CreadByte(0x34, 0x03);                            // read byte from xxx_IC_TYPE register
+  byte ChipID = I2CreadByte(AXP_SLAVE_ADDRESS, AXP192_CHIP_ID);                            // read byte from IC_TYPE register (0x03)
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
   if (ChipID == XPOWERS_AXP192_CHIP_ID) { // 0x03
     AXPchip = 1;
     Log::console(PSTR("AXP192 found"));   // T-Beam V1.1 with AXP192 power controller
-    I2CwriteByte(0x34, 0x28, 0xFF);       // Set LDO2 (LoRa) & LDO3 (GPS) to 3.3V , (1.8-3.3V, 100mV/step)
-    regV = I2CreadByte(0x34, 0x12);       // Power Output Control
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_LDO23_OUT_VOL, 0xFF);       // Set LDO2 (LoRa) & LDO3 (GPS) to 3.3V , (1.8-3.3V, 100mV/step)
+    regV = I2CreadByte(AXP192_SLAVE_ADDRESS, 0x12);       // Power Output Control
     regV = regV | 0x0C;                   // set bit 2 (LDO2) and bit 3 (LDO3)
-    I2CwriteByte(0x34, 0x12, regV);       // and power channels now enabled
-    I2CwriteByte(0x34, 0x84, 0b11000010); // Set ADC sample rate to 200hz, TS pin control 20uA
-    I2CwriteByte(0x34, 0x82, 0xFF);       // |Set ADC to|
-    I2CwriteByte(0x34, 0x83, 0x80);       // |All Enable|
-    I2CwriteByte(0x34, 0x33, 0xC3);       // Bat charge voltage to 4.2, Current 360MA and 10% for stop charging
-    I2CwriteByte(0x34, 0x36, 0x0C);       // 128ms power on, 4s power off, 1s Long key press
-    I2CwriteByte(0x34, 0x30, 0x80);       // Disable VBUS limits
-    I2CwriteByte(0x34, 0x39, 0xFC);       // Set TS protection to 3.2256v -> disable
-    I2CwriteByte(0x34, 0x32, 0x46);       // CHGLED controlled by the charging function
-    pmustat1 = I2CreadByte(0x34, 0x00); pmustat2 = I2CreadByte(0x34, 0x01);
-    irqstat0 = I2CreadByte(0x34, 0x44); irqstat1 = I2CreadByte(0x34, 0x45); irqstat2 = I2CreadByte(0x34, 0x46);
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, 0x12, regV);       // and power channels now enabled
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_ADC_SPEED, 0b11000010); // Set ADC sample rate to 200hz, TS pin control 20uA
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_ADC_EN1, 0xFF);       // |Set ADC to|
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_ADC_EN2, 0x80);       // |All Enable|
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_BAT_CHG_DIG_VOL, 0xC3);       // Bat charge voltage to 4.2, Current 360MA and 10% for stop charging
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_PEK_SET, 0x0C);       // 128ms power on, 4s power off, 1s Long key press
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_VBUS_VOL_LIMIT, 0x80);       // Disable VBUS limits
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_ADAPTER_OT_SET, 0xFC);       // Set TS protection to 3.2256v -> disable
+    I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_CHGLED_CONTROL, 0x46);       // CHGLED controlled by the charging function
+    pmustat1 = I2CreadByte(AXP192_SLAVE_ADDRESS, AXP192_STATUS); 
+    pmustat2 = I2CreadByte(AXP192_SLAVE_ADDRESS, AXP192_MODE_CHGSTATUS);
+    irqstat0 = I2CreadByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS1); 
+    irqstat1 = I2CreadByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS2); 
+    irqstat2 = I2CreadByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS3);
     Log::console(PSTR("PMU status1,status2 : %02X,%02X"), pmustat1, pmustat2);
     Log::console(PSTR("IRQ status 1,2,3    : %02X,%02X,%02X"), irqstat0, irqstat1, irqstat2);
   }
@@ -115,51 +118,53 @@ void Power::checkAXP()
     if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
       // T-Beam Supreme
       Log::console(PSTR("Configuring for T-Beam Supreme"));
-      I2CwriteByte(0x34, 0x92, 0x1C);       // set ALDO1 voltage to 3.3V ( Display )
-      I2CwriteByte(0x34, 0x94, 0x1C);       // set ALDO3 voltage to 3.3V ( Radio )
-      I2CwriteByte(0x34, 0x95, 0x1C);       // set ALDO4 voltage to 3.3V ( GPS )
-      I2CwriteByte(0x34, 0x6A, 0x04);       // set Button battery voltage to 3.0V ( backup battery )
-      I2CwriteByte(0x34, 0x64, 0x03);       // set Main battery voltage to 4.2V ( 18650 battery )
-      I2CwriteByte(0x34, 0x61, 0x05);       // set Main battery precharge current to 125mA
-      I2CwriteByte(0x34, 0x62, 0x0A);       // set Main battery charger current to 400mA
-      I2CwriteByte(0x34, 0x63, 0x15);       // set Main battery term charge current to 125mA
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ALDO1_VOLT, 0x1C);       // set ALDO1 voltage to 3.3V ( Display )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ALDO3_VOLT, 0x1C);       // set ALDO3 voltage to 3.3V ( Radio )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ALDO4_VOLT, 0x1C);       // set ALDO4 voltage to 3.3V ( GPS )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_CHG_BACKUP, 0x04);       // set Button battery voltage to 3.0V ( backup battery )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CV_VOLT, 0x03);       // set Main battery voltage to 4.2V ( 18650 battery )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IPRECHG, 0x05);       // set Main battery precharge current to 125mA
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC, 0x0A);       // set Main battery charger current to 400mA
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ITERM, 0x15);       // set Main battery term charge current to 125mA
       
       // Explicitly disable unused rails (ALDO2, BLDO1/2, DLDO1/2)
-      // AXP2101_LDO_ONOFF_CTRL0 (0x90): Bit 1 (ALDO2) -> 0
-      // AXP2101_LDO_ONOFF_CTRL1 (0x91): Bit 0-1 (BLDO1-2), Bit 2-3 (DLDO1-2) -> 0
-      I2CwriteByte(0x34, 0x91, 0x00); // Disable BLDO1, BLDO2, DLDO1, DLDO2
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL1, 0x00); // Disable BLDO1, BLDO2, DLDO1, DLDO2
 
-      regV = I2CreadByte(0x34, AXP2101_LDO_ONOFF_CTRL0);
+      regV = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0);
       regV &= ~(1 << AXP2101_ALDO2_BIT); // Disable ALDO2
       regV = regV | (1 << AXP2101_ALDO1_BIT) | (1 << AXP2101_ALDO3_BIT) | (1 << AXP2101_ALDO4_BIT);
-      I2CwriteByte(0x34, AXP2101_LDO_ONOFF_CTRL0, regV);       // and power channels now enabled
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0, regV);       // and power channels now enabled
     } else {
       // T-Beam V1.2 (SDA likely 21)
-      I2CwriteByte(0x34, 0x93, 0x1C);       // set ALDO2 voltage to 3.3V ( LoRa VCC )
-      I2CwriteByte(0x34, 0x94, 0x1C);       // set ALDO3 voltage to 3.3V ( GPS VDD )
-      I2CwriteByte(0x34, 0x6A, 0x04);       // set Button battery voltage to 3.0V ( backup battery )
-      I2CwriteByte(0x34, 0x64, 0x03);       // set Main battery voltage to 4.2V ( 18650 battery )
-      I2CwriteByte(0x34, 0x61, 0x05);       // set Main battery precharge current to 125mA
-      I2CwriteByte(0x34, 0x62, 0x0A);       // set Main battery charger current to 400mA ( 0x08-200mA, 0x09-300mA, 0x0A-400mA )
-      I2CwriteByte(0x34, 0x63, 0x15);       // set Main battery term charge current to 125mA
-      regV = I2CreadByte(0x34, AXP2101_LDO_ONOFF_CTRL0);
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ALDO2_VOLT, 0x1C);       // set ALDO2 voltage to 3.3V ( LoRa VCC )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ALDO3_VOLT, 0x1C);       // set ALDO3 voltage to 3.3V ( GPS VDD )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_CHG_BACKUP, 0x04);       // set Button battery voltage to 3.0V ( backup battery )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CV_VOLT, 0x03);       // set Main battery voltage to 4.2V ( 18650 battery )
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IPRECHG, 0x05);       // set Main battery precharge current to 125mA
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC, 0x0A);       // set Main battery charger current to 400mA
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ITERM, 0x15);       // set Main battery term charge current to 125mA
+      regV = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0);
       regV = regV | (1 << AXP2101_ALDO2_BIT) | (1 << AXP2101_ALDO3_BIT);
-      I2CwriteByte(0x34, AXP2101_LDO_ONOFF_CTRL0, regV);       // and power channels now enabled
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0, regV);       // and power channels now enabled
     }
 
-    regV = I2CreadByte(0x34, 0x18);       // XPOWERS_AXP2101_CHARGE_GAUGE_WDT_CTRL
+    regV = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
     regV = regV | 0x06;                   // set bit 1 (Main Battery) and bit 2 (Button battery)
-    I2CwriteByte(0x34, 0x18, regV);       // and chargers now enabled
-    I2CwriteByte(0x34, 0x14, 0x30);       // set minimum system voltage to 4.4V (default 4.7V), for poor USB cables
-    I2CwriteByte(0x34, 0x15, 0x05);       // set input voltage limit to 4.28v, for poor USB cables
-    I2CwriteByte(0x34, 0x24, 0x06);       // set Vsys for PWROFF threshold to 3.2V (default - 2.6V and kill battery)
-    I2CwriteByte(0x34, 0x50, 0x14);       // set TS pin to EXTERNAL input (not temperature)
-    I2CwriteByte(0x34, 0x69, 0x01);       // set CHGLED for 'type A' and enable pin function
-    I2CwriteByte(0x34, 0x27, 0x00);       // set IRQLevel/OFFLevel/ONLevel to minimum (1S/4S/128mS)
-    I2CwriteByte(0x34, 0x30, 0xFF);       // enable ADC for SYS, VBUS, TS and Battery
-    pmustat1 = I2CreadByte(0x34, 0x00); pmustat2 = I2CreadByte(0x34, 0x01);
-    pwronsta = I2CreadByte(0x34, 0x20); pwrofsta = I2CreadByte(0x34, 0x21);
-    irqstat0 = I2CreadByte(0x34, 0x48); irqstat1 = I2CreadByte(0x34, 0x49); irqstat2 = I2CreadByte(0x34, 0x4A);
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, regV);       // and chargers now enabled
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_V_LIMIT, 0x30);       // set minimum system voltage to 4.4V (default 4.7V)
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x05);       // set input voltage limit to 4.28v
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VOFF_SET, 0x06);       // set Vsys for PWROFF threshold to 3.2V
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_TS_PIN_CTRL, 0x14);       // set TS pin to EXTERNAL input (not temperature)
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHGLED_SET, 0x01);       // set CHGLED for 'type A' and enable pin function
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_PEK_SET, 0x00);       // set IRQLevel/OFFLevel/ONLevel to minimum (1S/4S/128mS)
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ADC_CONFIG, 0xFF);       // enable ADC for SYS, VBUS, TS and Battery
+    pmustat1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS1); 
+    pmustat2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
+    pwronsta = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_PWRON_STATUS); 
+    pwrofsta = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_PWROFF_STATUS);
+    irqstat0 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0); 
+    irqstat1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS1); 
+    irqstat2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS2);
     Log::console(PSTR("PMU status1,status2 : %02X,%02X"), pmustat1, pmustat2);
     Log::console(PSTR("PWRON,PWROFF status : %02X,%02X"), pwronsta, pwrofsta);
     Log::console(PSTR("IRQ status 0,1,2    : %02X,%02X,%02X"), irqstat0, irqstat1, irqstat2);
@@ -208,13 +213,13 @@ float Power::getBatteryVoltage() {
     
     if (AXPchip == 1) { // AXP192
         uint8_t buf[2];
-        I2Cread(AXP192_SLAVE_ADDRESS, 0x78, 2, buf);
-        voltage = ((buf[0] << 4) | (buf[1] & 0x0F)) * 1.1;
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_BAT_AVERVOL_H, 2, buf);
+        voltage = ((buf[0] << AXP192_BAT_VOL_MSB_SHIFT) | (buf[1] & AXP192_BAT_VOL_LSB_MASK)) * AXP192_BAT_VOL_STEP;
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2] = {0, 0};
-        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATTERY_VOLT_H, sizeof(buf), buf);
-        // AXP2101: 1mV/bit
-        voltage = (buf[0] << AXP2101_BATT_VOLT_SHIFT) | (buf[1] & AXP2101_BATT_VOLT_MASK); 
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATTERY_VOLT_H, 2, buf);
+        // AXP2101: Voltage is 16-bit (H << 8 | L), 1mV/bit
+        voltage = (float)((buf[0] << AXP2101_VOLT_MSB_SHIFT) | buf[1]); 
     } else {
         // Fallback for boards without PMU (Heltec V1/V2 etc uses GPIO 36)
         int length = 21;
@@ -250,15 +255,31 @@ float Power::getVbusVoltage() {
     float voltage = 0;
     if (AXPchip == 1) { // AXP192
         uint8_t buf[2] = {0, 0};
-        I2Cread(AXP192_SLAVE_ADDRESS, 0x5A, 2, buf); // 0x5A: VBUS voltage [11:4], 0x5B: [3:0]
-        voltage = ((buf[0] << 4) | (buf[1] & 0x0F)) * 1.7;
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_VBUS_VOL_H, 2, buf);
+        voltage = ((buf[0] << AXP192_VBUS_VOL_MSB_SHIFT) | (buf[1] & AXP192_VBUS_VOL_LSB_MASK)) * AXP192_VBUS_VOL_STEP;
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_VOLT_H, 2, buf);
-        // AXP2101 VBUS: 1mV/bit
-        voltage = (buf[0] << AXP2101_VBUS_VOLT_SHIFT) | (buf[1] & AXP2101_VBUS_VOLT_MASK);
+        // AXP2101 VBUS: 16-bit (H << 8 | L), 1mV/bit
+        voltage = (float)((buf[0] << AXP2101_VOLT_MSB_SHIFT) | buf[1]);
     }
     return voltage;
+}
+
+float Power::getDieTemperature() {
+    if (AXPchip == 1) { // AXP192
+        uint8_t buf[2];
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_DIE_TEMP_H, 2, buf);
+        uint16_t raw = (buf[0] << 4) | (buf[1] & 0x0F);
+        return raw * 0.1 - 144.7;
+    } else if (AXPchip == 2) { // AXP2101
+        uint8_t buf[2];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_DIE_TEMP_H, 2, buf);
+        // AXP2101: 14-bit, 0.1 degC / bit. Formula: (MSB << 8 | LSB) * 0.1 - 144.7
+        uint16_t raw = ((buf[0] & AXP2101_DIE_TEMP_MSB_MASK) << 8) | buf[1];
+        return raw * 0.1 - 144.7;
+    }
+    return 0;
 }
 
 int Power::getBatteryPercentage() {
@@ -308,19 +329,19 @@ void Power::setGnssPower(bool on) {
 
 bool Power::isVbusPresent() {
     if (AXPchip == 1 || AXPchip == 2) {
-        uint8_t reg = I2CreadByte(0x34, 0x00);
-        return (reg & (1 << 5)) != 0;
+        uint8_t reg = I2CreadByte(AXP_SLAVE_ADDRESS, AXP2101_STATUS1); // Common STATUS register (0x00)
+        return (reg & (1 << AXP2101_VBUS_PRESENT_BIT)) != 0;
     }
     return false;
 }
 
 bool Power::isCharging() {
     if (AXPchip == 1) {
-        uint8_t reg = I2CreadByte(AXP192_SLAVE_ADDRESS, 0x01);
+        uint8_t reg = I2CreadByte(AXP192_SLAVE_ADDRESS, AXP192_MODE_CHGSTATUS);
         return (reg & (1 << 6)) != 0;
     } else if (AXPchip == 2) {
-        uint8_t reg = I2CreadByte(AXP2101_SLAVE_ADDRESS, 0x01);
-        uint8_t status = reg & 0x07;
+        uint8_t reg = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
+        uint8_t status = reg & AXP2101_CHG_STATUS_MASK;
         return (status >= 1 && status <= 4); // 1: Charge start, 2: Charge, 3: Charge end, 4: Over-temp charge
     }
     return false;
@@ -329,44 +350,49 @@ bool Power::isCharging() {
 float Power::getBatteryCurrent() {
     if (AXPchip == 1) { // AXP192
         uint8_t buf[2];
-        I2Cread(AXP192_SLAVE_ADDRESS, 0x7A, 2, buf);
-        float charge = ((buf[0] << 5) | (buf[1] & 0x1F)) * 0.5;
-        I2Cread(AXP192_SLAVE_ADDRESS, 0x7C, 2, buf);
-        float discharge = ((buf[0] << 5) | (buf[1] & 0x1F)) * 0.5;
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_BAT_AVERCHGCUR_H, 2, buf);
+        float charge = ((buf[0] << AXP192_BAT_CUR_MSB_SHIFT) | (buf[1] & AXP192_BAT_CUR_LSB_MASK)) * AXP192_BAT_CUR_STEP;
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_BAT_AVERDISCHGCUR_H, 2, buf);
+        float discharge = ((buf[0] << AXP192_BAT_CUR_MSB_SHIFT) | (buf[1] & AXP192_BAT_CUR_LSB_MASK)) * AXP192_BAT_CUR_STEP;
         return charge - discharge;
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2];
-        // Charge current: 14-bit (bits 13:0)
-        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_CHG_CUR_H, 2, buf);
-        uint16_t chargeRaw = ((buf[0] & 0x3F) << 8) | buf[1];
-        float charge = (float)chargeRaw;
-        
-        // Discharge current: 14-bit (bits 13:0)
-        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_DISCHG_CUR_H, 2, buf);
-        uint16_t dischargeRaw = ((buf[0] & 0x3F) << 8) | buf[1];
-        float discharge = (float)dischargeRaw;
-        
-        return charge - discharge;
+        // Read 16-bit signed current from E-Gauge registers 0xA5/0xA6
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_CUR_H, 2, buf);
+        int16_t cur = (int16_t)((buf[0] << AXP2101_CUR_MSB_SHIFT) | buf[1]);
+        return (float)cur;
     }
     return 0;
 }
 
-void Power::getRawPowerData(uint8_t* buf) {
+void Power::getPmuData(PmuData* data) {
+    data->battVol = getBatteryVoltage();
+    data->vbusVol = getVbusVoltage();
+    data->battCur = getBatteryCurrent();
+    data->dieTemp = getDieTemperature();
+    data->battPct = getBatteryPercentage();
+    data->vbusPresent = isVbusPresent();
+    data->charging = isCharging();
+    getIRQStatus(data->irqs);
+    
     if (AXPchip == 2) { // AXP2101
-        // Read 0x3C-0x3F (Currents), 0x34-0x35 (Batt V), 0x38-0x39 (Vbus V)
-        I2Cread(AXP2101_SLAVE_ADDRESS, 0x3C, 4, buf);      // 0,1,2,3
-        I2Cread(AXP2101_SLAVE_ADDRESS, 0x34, 2, buf + 4);  // 4,5
-        I2Cread(AXP2101_SLAVE_ADDRESS, 0x38, 2, buf + 6);  // 6,7
-    } else {
-        memset(buf, 0, 8);
+        uint8_t buf[2];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATTERY_VOLT_H, 2, buf);
+        data->raw_battVol = (buf[0] << 8) | buf[1];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_VOLT_H, 2, buf);
+        data->raw_vbusVol = (buf[0] << 8) | buf[1];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_CUR_H, 2, buf);
+        data->raw_battCur = (buf[0] << 8) | buf[1];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_DIE_TEMP_H, 2, buf);
+        data->raw_dieTemp = (buf[0] << 8) | buf[1];
     }
 }
 
 void Power::getIRQStatus(uint8_t* irqs) {
     if (AXPchip == 1) {
-        I2Cread(AXP192_SLAVE_ADDRESS, 0x44, 3, irqs);
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS1, 3, irqs);
     } else if (AXPchip == 2) {
-        I2Cread(AXP2101_SLAVE_ADDRESS, 0x48, 3, irqs);
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, 3, irqs);
     } else {
         irqs[0] = irqs[1] = irqs[2] = 0;
     }
@@ -375,14 +401,14 @@ void Power::getIRQStatus(uint8_t* irqs) {
 void Power::clearIRQ() {
     uint8_t irqs[3];
     if (AXPchip == 1) {
-        I2Cread(AXP192_SLAVE_ADDRESS, 0x44, 3, irqs);
-        I2CwriteByte(AXP192_SLAVE_ADDRESS, 0x44, irqs[0]);
-        I2CwriteByte(AXP192_SLAVE_ADDRESS, 0x45, irqs[1]);
-        I2CwriteByte(AXP192_SLAVE_ADDRESS, 0x46, irqs[2]);
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS1, 3, irqs);
+        I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS1, irqs[0]);
+        I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS2, irqs[1]);
+        I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS3, irqs[2]);
     } else if (AXPchip == 2) {
-        I2Cread(AXP2101_SLAVE_ADDRESS, 0x48, 3, irqs);
-        I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x48, irqs[0]);
-        I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x49, irqs[1]);
-        I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x4A, irqs[2]);
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, 3, irqs);
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, irqs[0]);
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS1, irqs[1]);
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS2, irqs[2]);
     }
 }

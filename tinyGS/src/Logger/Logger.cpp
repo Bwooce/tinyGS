@@ -121,6 +121,32 @@ void Log::errorAsync(const char* formatP, ...)
   }
 }
 
+void Log::infoAsync(const char* formatP, ...)
+{
+  if (!asyncEnabled) {
+    // Fallback to synchronous logging
+    va_list arg;
+    char buffer[256];
+    va_start(arg, formatP);
+    vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+    va_end(arg);
+    AddLog(LOG_LEVEL_INFO, buffer);
+    return;
+  }
+  
+  LogMessage msg;
+  va_list arg;
+  va_start(arg, formatP);
+  vsnprintf_P(msg.message, sizeof(msg.message), formatP, arg);
+  va_end(arg);
+  msg.level = LOG_LEVEL_INFO;
+  
+  // Non-blocking send - if queue is full, drop the message
+  if (xQueueSend(logQueue, &msg, 0) != pdTRUE) {
+    // Queue full - message dropped
+  }
+}
+
 void Log::debugAsync(const char* formatP, ...)
 {
   if (!asyncEnabled) {

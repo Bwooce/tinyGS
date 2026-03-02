@@ -139,11 +139,41 @@ void onWiFiEvent(WiFiEvent_t event) {
     }
 }
 
+void logPmuReport(const char* prefix) {
+    Power& power = Power::getInstance();
+    PmuData data;
+    power.getPmuData(&data);
+
+    char irqDesc[64] = "";
+    // Decode IRQs based on common event flags
+    if (data.irqs[0] & (1 << 1)) strcat(irqDesc, "V+ ");
+    if (data.irqs[0] & (1 << 2)) strcat(irqDesc, "V- ");
+    if (data.irqs[0] & (1 << 5)) strcat(irqDesc, "C+ ");
+    if (data.irqs[0] & (1 << 4)) strcat(irqDesc, "C- ");
+    if (data.irqs[0] & (1 << 6)) strcat(irqDesc, "B+ ");
+    if (data.irqs[0] & (1 << 7)) strcat(irqDesc, "B- ");
+    if (data.irqs[1] & (1 << 0)) strcat(irqDesc, "OT! ");
+
+    Log::console(PSTR("%s: %s (%s), %.2fV (%d%%), %dmA, %.1fC, IRQs: %02X,%02X,%02X [%s] RAW: %04X,%04X,%04X,%04X"), 
+        prefix,
+        data.vbusPresent ? "USB/Sol" : "Battery",
+        data.charging ? "CHG" : "IDLE",
+        data.battVol/1000.0,
+        data.battPct,
+        (int)data.battCur,
+        data.dieTemp,
+        data.irqs[0], data.irqs[1], data.irqs[2],
+        irqDesc,
+        data.raw_battCur, data.raw_battVol, data.raw_vbusVol, data.raw_dieTemp
+    );
+    power.clearIRQ();
+}
+
 void configured()
 {
   configManager.setConfiguredCallback(NULL);
   configManager.printConfig();
-  Power::getInstance().clearIRQ();
+  logPmuReport("Boot Power");
   radio.init();
 }
 
@@ -392,28 +422,7 @@ void loop() {
   // Periodic Power Log
   static unsigned long lastPowerLog = 0;
   if (millis() - lastPowerLog > 300000) {
-      Power& power = Power::getInstance();
-      float battVol = power.getBatteryVoltage();
-      int battPct = power.getBatteryPercentage();
-      float battCur = power.getBatteryCurrent();
-      bool charging = power.isCharging();
-      bool vbus = power.isVbusPresent();
-      uint8_t irqs[3];
-      power.getIRQStatus(irqs);
-      uint8_t raw[8];
-      power.getRawPowerData(raw);
-      
-      Log::console(PSTR("Power Status: %s, Batt: %.2fV (%d%%), Cur: %dmA (%s), IRQs: %02X,%02X,%02X, RAW: %02X%02X,%02X%02X / %02X%02X,%02X%02X"), 
-          vbus ? "USB/Solar" : "Battery",
-          battVol/1000.0,
-          battPct,
-          (int)abs(battCur),
-          battCur > 2 ? "UP" : (battCur < -2 ? "DN" : (charging ? "FULL" : "IDLE")),
-          irqs[0], irqs[1], irqs[2],
-          raw[0], raw[1], raw[2], raw[3], // Current Chg / Dischg
-          raw[4], raw[5], raw[6], raw[7]  // Batt V / Vbus V
-      );
-      power.clearIRQ();
+      logPmuReport("Power Status");
       lastPowerLog = millis();
   }
 

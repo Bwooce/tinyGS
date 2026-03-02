@@ -36,9 +36,10 @@ public:
   
   // Asynchronous logging functions (non-blocking)
   static void initAsync();
-  static void consoleAsync(const char* logData, ...);
-  static void errorAsync(const char* logData, ...);
-  static void debugAsync(const char* logData, ...);
+  static void consoleAsync(const char* formatP, ...);
+  static void errorAsync(const char* formatP, ...);
+  static void infoAsync(const char* formatP, ...);
+  static void debugAsync(const char* formatP, ...);
   
   // Synchronous logging functions (blocking - legacy)
   static void console(const char* logData, ...);
