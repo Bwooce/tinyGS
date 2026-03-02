@@ -91,6 +91,10 @@ class HTTPUpdateServer
           HTTPUpload& upload = _server->upload();
 
           if(upload.status == UPLOAD_FILE_START){
+#if defined(ESP32)
+              disableCore0WDT();
+              disableCore1WDT();
+#endif
               _updaterError = String();
               if (_serial_output)
                   Serial.setDebugOutput(true);

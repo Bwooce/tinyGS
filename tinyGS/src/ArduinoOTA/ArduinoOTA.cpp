@@ -29,6 +29,11 @@ void arduino_ota_setup () {
 			else // U_SPIFFS
 				type = "filesystem";
 
+#if defined(ESP32)
+            disableCore0WDT();
+            disableCore1WDT();
+#endif
+
 			  // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
 			Log::console(PSTR("Start updating %s"), type.c_str());
 		})

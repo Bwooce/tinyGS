@@ -409,7 +409,9 @@ void ConfigManager::handleRefreshConsole()
     counter = atoi(stmp);
   }
 
-#if CONFIG_IDF_TARGET_ESP32S3  
+  // In ESP32 Arduino Core 3.0+ (used by pioarduino), flush() only clears the TX buffer.
+  // We must use clear() to discard unread incoming RX data (like HTTP request bodies).
+#if defined(ESP_ARDUINO_VERSION) && ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
   server.client().clear();
 #else
   server.client().flush();
@@ -466,7 +468,9 @@ void ConfigManager::handleRefreshWorldmap()
     }
   }
 
-#if CONFIG_IDF_TARGET_ESP32S3  
+  // In ESP32 Arduino Core 3.0+ (used by pioarduino), flush() only clears the TX buffer.
+  // We must use clear() to discard unread incoming RX data (like HTTP request bodies).
+#if defined(ESP_ARDUINO_VERSION) && ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
   server.client().clear();
 #else
   server.client().flush();
