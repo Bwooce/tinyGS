@@ -24,6 +24,7 @@
 #endif
 #include <base64.h>
 #include "../Logger/Logger.h"
+#include "../GnssManager/GnssManager.h"
 #include <AioP13.h>
 //@estbhan
 //04/08/2023
@@ -189,7 +190,12 @@ if (status.modeminfo.tle[0] != 0)
   const char  *pcMyName = "tinyGS";    // Observer name
   double       dMyLAT   = ConfigManager::getInstance().getLatitude();  // Latitude (Breitengrad): N -> +, S -> -
   double       dMyLON   = ConfigManager::getInstance().getLongitude(); ;  // Longitude (Längengrad): E -> +, W -> -
-  double       dMyALT   = status.tle.tgsALT;      // Altitude ASL (m)
+  
+  double dMyALT = ConfigManager::getInstance().getAltitude();
+  if (dMyALT == 0 && GnssManager::getInstance().isEnabled()) {
+      dMyALT = GnssManager::getInstance().getAltitude();
+  }
+  if (dMyALT == 0) dMyALT = status.tle.tgsALT; // Fallback to struct default if still 0
   
   double       dfreqRX  = status.modeminfo.frequency;     // Nominal downlink frequency
   double       dfreqTX  = status.modeminfo.frequency;     // Nominal uplink frequency

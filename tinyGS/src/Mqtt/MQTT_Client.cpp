@@ -234,6 +234,10 @@ void MQTT_Client::sendWelcome()
   JsonArray station_location = doc.createNestedArray("station_location");
   station_location.add(configManager.getLatitude());
   station_location.add(configManager.getLongitude());
+  float alt = GnssManager::getInstance().getAltitude();
+  if (alt != 0) {
+      station_location.add(alt);
+  }
   doc["tx"] = configManager.getAllowTx();
   doc["time"] = now;
   doc["version"] = status.version;
@@ -283,6 +287,10 @@ void MQTT_Client::sendRx(String packet, bool noisy, String raw_packet)
   JsonArray station_location = doc.createNestedArray("station_location");
   station_location.add(configManager.getLatitude());
   station_location.add(configManager.getLongitude());
+  float alt = GnssManager::getInstance().getAltitude();
+  if (alt != 0) {
+      station_location.add(alt);
+  }
   doc["mode"] = status.modeminfolastpckt.modem_mode;
   doc["frequency"] = status.modeminfolastpckt.frequency;
   doc["frequency_offset"] = status.modeminfolastpckt.freqOffset;
@@ -354,6 +362,10 @@ void MQTT_Client::sendRxFromQueue(const RxPacketMessage& msg)
   JsonArray station_location = doc.createNestedArray("station_location");
   station_location.add(configManager.getLatitude());
   station_location.add(configManager.getLongitude());
+  float alt = GnssManager::getInstance().getAltitude();
+  if (alt != 0) {
+      station_location.add(alt);
+  }
   doc["mode"] = msg.modem_mode;
   doc["frequency"] = msg.frequency;
   doc["frequency_offset"] = msg.freqOffset;
@@ -506,10 +518,9 @@ void MQTT_Client::sendStatus()
   JsonArray station_location = doc.createNestedArray("station_location");
   station_location.add(configManager.getLatitude());
   station_location.add(configManager.getLongitude());
-  
-  // Add Altitude if available (GnssManager)
-  if (GnssManager::getInstance().hasFix() || GnssManager::getInstance().getAltitude() != 0) {
-      station_location.add(GnssManager::getInstance().getAltitude());
+  float alt = GnssManager::getInstance().getAltitude();
+  if (alt != 0) {
+      station_location.add(alt);
   }
 
   doc["version"] = status.version;
@@ -991,21 +1002,24 @@ void MQTT_Client::manageSetPosParameters(char *payload, size_t payload_len)
     Log::debug(PSTR("Lat received= %.3f Lat local= %.3f"),receivedLat,currentLat );
     Log::debug(PSTR("Lon received= %.3f Lon local= %.3f"),receivedLon,currentLon );
     Log::debug(PSTR("Alt received= %.1f "),status.tle.tgsALT );
+    
     if (receivedLat != currentLat) {
-          Log::debug(PSTR("Lat received= %.3f Lat local= %.3f"),receivedLat,currentLat );
           char buff[10];
           sprintf(buff, "%.3f", receivedLat);
-          Log::debug(PSTR("%s"), buff);
           ConfigManager::getInstance().setLat(buff);
-        }
+    }
 
     if (receivedLon != currentLon) {
-          Log::debug(PSTR("Lat received= %.3f Lat local= %.3f"),receivedLon,currentLon );
           char buff[10];
           sprintf(buff, "%.3f", receivedLon);
-          Log::debug(PSTR("%s"), buff);
           ConfigManager::getInstance().setLon(buff);
-        } 
+    }
+
+    if (status.tle.tgsALT != ConfigManager::getInstance().getAltitude()) {
+          char buff[10];
+          sprintf(buff, "%.1f", status.tle.tgsALT);
+          ConfigManager::getInstance().setAlt(buff);
+    }
   }
 
 }

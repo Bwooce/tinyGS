@@ -94,6 +94,7 @@ ConfigManager::ConfigManager()
 
   addSystemParameter(&latitudeParam);
   addSystemParameter(&longitudeParam);
+  addSystemParameter(&altitudeParam);
   addSystemParameter(&tzParam);
 
   groupMqtt.addItem(&mqttServerParam);
@@ -699,6 +700,7 @@ void ConfigManager::resetAllConfig()
   mqttPassParam.valueBuffer[0] = '\0';
   latitude[0] = '\0';
   longitude[0] = '\0';
+  altitude[0] = '\0';
   //oledBright[0] = '\0'; // Disabled to avoid turining display off
   allowTx[0] = '\0';
   remoteTune[0] = '\0';

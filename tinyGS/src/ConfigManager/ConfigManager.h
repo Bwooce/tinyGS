@@ -38,6 +38,7 @@ static const char* MQTT_SERVER_PORT = "8883";
 
 constexpr auto STATION_NAME_LENGTH = 21;
 constexpr auto COORDINATE_LENGTH = 10;
+constexpr auto ALTITUDE_LENGTH = 10;
 constexpr auto MIN_COORDINATE_LENGTH = 1;
 constexpr auto MQTT_SERVER_LENGTH = 31;
 constexpr auto MQTT_PORT_LENGTH = 6;
@@ -188,6 +189,7 @@ public:
   const char *getMqttPass() { return mqttPass; }
   float getLatitude() { return atof(latitude); }
   float getLongitude() { return atof(longitude); }
+  float getAltitude() { return atof(altitude); }
   const char *getTZ() { return strlen(tz) > 3 ? tz + 3 : "GMT0"; } // Safe offset, default to GMT0
   uint8_t getBoard() { return atoi(board); }
   uint8_t getOledBright() { return atoi(oledBright); }
@@ -229,6 +231,7 @@ public:
   //void setLongitude (const char* lng);
   iotwebconf2::Parameter* getLongitudeParameter () { return &longitudeParam; }
   iotwebconf2::Parameter* getLatitudeParameter () { return &latitudeParam; }
+  iotwebconf2::Parameter* getAltitudeParameter () { return &altitudeParam; }
   //void setTZ (const char* tz);
   iotwebconf2::Parameter* getTZParameter () { return &tzParam; }
   
@@ -240,6 +243,11 @@ public:
   void setLon(const char *buffer)
   {
     strcpy(longitude, buffer);
+    this->saveConfig();
+  }
+  void setAlt(const char *buffer)
+  {
+    strcpy(altitude, buffer);
     this->saveConfig();
   }
   // Runtime setters that do not save to flash
@@ -354,6 +362,7 @@ private:
   bool remoteSave = false;
   char latitude[COORDINATE_LENGTH] = "";
   char longitude[COORDINATE_LENGTH] = "";
+  char altitude[ALTITUDE_LENGTH] = "";
   char tz[TZ_LENGTH] = "";
   char mqttServer[MQTT_SERVER_LENGTH] = MQTT_DEFAULT_SERVER;
   char mqttPort[MQTT_PORT_LENGTH] = MQTT_DEFAULT_PORT;
@@ -376,6 +385,7 @@ private:
   //iotwebconf2::NumberParameter latitudeParam = iotwebconf2::NumberParameter("Latitude (3 decimals, will be public)", "lat", latitude, COORDINATE_LENGTH, NULL, "0.000", "required min='-180' max='180' step='0.001'");
   iotwebconf2::NumberParameter latitudeParam = iotwebconf2::NumberParameter("Latitude (3 decimals, will be public)", "lat", latitude, COORDINATE_LENGTH, NULL, "0.000", "min='-180' max='180' step='0.001'");
   iotwebconf2::NumberParameter longitudeParam = iotwebconf2::NumberParameter("Longitude (3 decimals, will be public)", "lng", longitude, COORDINATE_LENGTH, NULL, "-0.000", "min='-180' max='180' step='0.001'");
+  iotwebconf2::NumberParameter altitudeParam = iotwebconf2::NumberParameter("Altitude (meters ASL)", "alt", altitude, ALTITUDE_LENGTH, NULL, "500", "min='-500' max='10000' step='1'");
   iotwebconf2::SelectParameter tzParam = iotwebconf2::SelectParameter("Time Zone", "tz", tz, TZ_LENGTH, (char *)TZ_VALUES, (char *)TZ_NAMES, sizeof(TZ_VALUES) / TZ_LENGTH, TZ_NAME_LENGTH);
   iotwebconf2::ParameterGroup groupMqtt = iotwebconf2::ParameterGroup ("MQTT credentials", "MQTT credentials (First join the group <a href='https://t.me/joinchat/DmYSElZahiJGwHX6jCzB3Q'>here</a>)<br>Then open a private chat with <a href='https://t.me/tinygs_personal_bot'>@tinygs_personal_bot</a> and ask /mqtt");
   iotwebconf2::TextParameter mqttServerParam = iotwebconf2::TextParameter ("Server address", "mqtt_server", mqttServer, MQTT_SERVER_LENGTH, MQTT_SERVER_HOST, NULL, "type=\"text\" maxlength=30");
