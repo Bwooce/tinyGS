@@ -66,7 +66,7 @@
 **************************************************************************/
 
 #if defined(ARDUINO) && ARDUINO >= 100
-#include "Arduino.h"
+#include <Arduino.h>
 #else
 #include "WProgram.h"
 #endif
@@ -154,17 +154,19 @@ void logPmuReport(const char* prefix) {
     if (data.irqs[0] & (1 << 7)) strcat(irqDesc, "B- ");
     if (data.irqs[1] & (1 << 0)) strcat(irqDesc, "OT! ");
 
-    Log::console(PSTR("%s: %s (%s), %.2fV (%d%%), %dmA, %.1fC, IRQs: %02X,%02X,%02X [%s] RAW: %04X,%04X,%04X,%04X"), 
+    Log::console(PSTR("%s: %s (%s), %.2fV (%d%%), Net: %dmA (C:%dmA, D:%dmA), Sys: %dmA, %.1fC, IRQs: %02X,%02X,%02X [%s]"), 
         prefix,
         data.vbusPresent ? "USB/Sol" : "Battery",
         data.charging ? "CHG" : "IDLE",
         data.battVol/1000.0,
         data.battPct,
         (int)data.battCur,
+        (int)data.battChgCur,
+        (int)data.battDischgCur,
+        (int)data.sysCur,
         data.dieTemp,
         data.irqs[0], data.irqs[1], data.irqs[2],
-        irqDesc,
-        data.raw_battCur, data.raw_battVol, data.raw_vbusVol, data.raw_dieTemp
+        irqDesc
     );
     power.clearIRQ();
 }

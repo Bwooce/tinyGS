@@ -261,11 +261,16 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData)
     memmove(log, it, MAX_LOG_SIZE -(it-log));  // Move buffer forward to remove oldest log line
   }
   
-  snprintf_P(log, sizeof(log), PSTR("%s%c%s%s\1"), log, logIdx++, timeStr, logData);
+  // Append the new log entry
+  size_t currentLen = strlen(log);
+  char* append_p = log + currentLen;
+  size_t spaceLeft = MAX_LOG_SIZE - currentLen - 1;
+  
+  snprintf_P(append_p, spaceLeft, PSTR("%c%s%s\1"), logIdx++, timeStr, logData);
 
   logIdx &= 0xFF;
   if (!logIdx) 
-    logIdx++;       // Index 0 is not allowed as it is the end of char string*/
+    logIdx++;       // Index 0 is not allowed as it is the end of char string
 }
 
 void Log::getLog(uint32_t idx, char** entry_pp, size_t* len_p)
@@ -305,6 +310,12 @@ size_t Log::strchrspn(const char *str1, int character)
 char Log::getLogIdx()
 {
   return logIdx;
+}
+
+char Log::getOldestLogIdx()
+{
+  if (log[0] == '\0') return logIdx;
+  return (char)log[0];
 }
 
 void Log::setLogLevel(LoggingLevels level)

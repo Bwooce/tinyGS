@@ -48,6 +48,7 @@ public:
   static void debug(const char* logData, ...);
   static void getLog(uint32_t idx, char** entry_pp, size_t* len_p);
   static char getLogIdx();
+  static char getOldestLogIdx();
   static void setLogLevel(LoggingLevels level);
   static void log_packet(uint8_t *packet, size_t size);
   static void log_packet_hex(uint8_t *packet, size_t size);

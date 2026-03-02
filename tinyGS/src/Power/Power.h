@@ -25,6 +25,8 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
 
+#if defined(ESP32)
+
 #define XPOWERS_AXP192_CHIP_ID      0x03
 #define XPOWERS_AXP2101_CHIP_ID     0x4A
 
@@ -47,6 +49,8 @@
 #define AXP192_IRQ_STATUS3          0x46
 #define AXP192_VBUS_VOL_H           0x5A
 #define AXP192_VBUS_VOL_L           0x5B
+#define AXP192_VBUS_CUR_H           0x5C
+#define AXP192_VBUS_CUR_L           0x5D
 #define AXP192_DIE_TEMP_H           0x5E
 #define AXP192_DIE_TEMP_L           0x5F
 #define AXP192_BAT_AVERVOL_H        0x78
@@ -60,15 +64,16 @@
 #define AXP192_ADC_SPEED            0x84
 
 // AXP192 Bitmasks and Shifts
-#define AXP192_VBUS_VOL_MSB_SHIFT   4
-#define AXP192_VBUS_VOL_LSB_MASK    0x0F
+#define AXP192_ADC_MSB_SHIFT        4
+#define AXP192_ADC_LSB_MASK         0x0F
 #define AXP192_VBUS_VOL_STEP        1.7f
-#define AXP192_BAT_VOL_MSB_SHIFT    4
-#define AXP192_BAT_VOL_LSB_MASK     0x0F
+#define AXP192_VBUS_CUR_STEP        0.375f
 #define AXP192_BAT_VOL_STEP         1.1f
-#define AXP192_BAT_CUR_MSB_SHIFT    5
-#define AXP192_BAT_CUR_LSB_MASK     0x1F
-#define AXP192_BAT_CUR_STEP         0.5f
+#define AXP192_CUR_MSB_SHIFT        5
+#define AXP192_CUR_LSB_MASK         0x1F
+#define AXP192_CUR_STEP             0.5f
+#define AXP192_DIE_TEMP_STEP        0.1f
+#define AXP192_DIE_TEMP_OFFSET      -144.7f
 
 // AXP2101 Specific Registers
 #define AXP2101_SLAVE_ADDRESS       0x34
@@ -91,8 +96,14 @@
 #define AXP2101_BATTERY_VOLT_L      0x35
 #define AXP2101_VBUS_VOLT_H         0x38
 #define AXP2101_VBUS_VOLT_L         0x39
+#define AXP2101_VBUS_CUR_H          0x3A
+#define AXP2101_VBUS_CUR_L          0x3B
 #define AXP2101_DIE_TEMP_H          0x3C
 #define AXP2101_DIE_TEMP_L          0x3D
+#define AXP2101_BATT_CHG_CUR_H      0x40
+#define AXP2101_BATT_CHG_CUR_L      0x41
+#define AXP2101_BATT_DISCHG_CUR_H   0x42
+#define AXP2101_BATT_DISCHG_CUR_L   0x43
 #define AXP2101_IRQ_STATUS0         0x48
 #define AXP2101_IRQ_STATUS1         0x49
 #define AXP2101_IRQ_STATUS2         0x4A
@@ -120,14 +131,21 @@
 #define AXP2101_ALDO4_BIT           3
 #define AXP2101_VBUS_PRESENT_BIT    5
 #define AXP2101_CHG_STATUS_MASK     0x07
+#define AXP2101_ADC_MSB_MASK        0x3F
 #define AXP2101_VOLT_MSB_SHIFT      8
 #define AXP2101_CUR_MSB_SHIFT       8
 #define AXP2101_DIE_TEMP_MSB_MASK   0x3F
+#define AXP2101_DIE_TEMP_STEP       0.1f
+#define AXP2101_DIE_TEMP_OFFSET     -644.7f
 
 struct PmuData {
     float battVol;
     float vbusVol;
-    float battCur;
+    float battCur; // Net Current
+    float battChgCur; // Indiv Charge
+    float battDischgCur; // Indiv Discharge
+    float vbusCur;
+    float sysCur;
     float dieTemp;
     int battPct;
     bool vbusPresent;
@@ -136,8 +154,11 @@ struct PmuData {
     uint16_t raw_battVol;
     uint16_t raw_vbusVol;
     uint16_t raw_battCur;
+    uint16_t raw_vbusCur;
     uint16_t raw_dieTemp;
 };
+
+#endif // ESP32
 
 extern Status status;
 
@@ -152,11 +173,18 @@ public:
      float getBatteryVoltage();
      int getBatteryPercentage();
      float getVbusVoltage();
+     float getVbusCurrent();
+     float getSystemCurrent();
      bool isVbusPresent();
      bool isCharging();
      float getBatteryCurrent();
+     float getBatteryChargeCurrent();
+     float getBatteryDischargeCurrent();
      float getDieTemperature();
+     uint8_t getChipType(); 
+#if defined(ESP32)
      void getPmuData(PmuData* data);
+#endif
      void getIRQStatus(uint8_t* irqs);
      void clearIRQ();
      void setGnssPower(bool on);

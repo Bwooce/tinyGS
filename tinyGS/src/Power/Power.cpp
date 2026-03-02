@@ -21,6 +21,7 @@
 #include "Power.h"
 #include "../Logger/Logger.h"
 
+#if defined(ESP32)
 
 byte AXPchip = 0;
 byte pmustat1;
@@ -214,7 +215,7 @@ float Power::getBatteryVoltage() {
     if (AXPchip == 1) { // AXP192
         uint8_t buf[2];
         I2Cread(AXP192_SLAVE_ADDRESS, AXP192_BAT_AVERVOL_H, 2, buf);
-        voltage = ((buf[0] << AXP192_BAT_VOL_MSB_SHIFT) | (buf[1] & AXP192_BAT_VOL_LSB_MASK)) * AXP192_BAT_VOL_STEP;
+        voltage = ((buf[0] << AXP192_ADC_MSB_SHIFT) | (buf[1] & AXP192_ADC_LSB_MASK)) * AXP192_BAT_VOL_STEP;
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATTERY_VOLT_H, 2, buf);
@@ -256,7 +257,7 @@ float Power::getVbusVoltage() {
     if (AXPchip == 1) { // AXP192
         uint8_t buf[2] = {0, 0};
         I2Cread(AXP192_SLAVE_ADDRESS, AXP192_VBUS_VOL_H, 2, buf);
-        voltage = ((buf[0] << AXP192_VBUS_VOL_MSB_SHIFT) | (buf[1] & AXP192_VBUS_VOL_LSB_MASK)) * AXP192_VBUS_VOL_STEP;
+        voltage = ((buf[0] << AXP192_ADC_MSB_SHIFT) | (buf[1] & AXP192_ADC_LSB_MASK)) * AXP192_VBUS_VOL_STEP;
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2] = {0, 0};
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_VOLT_H, 2, buf);
@@ -266,18 +267,67 @@ float Power::getVbusVoltage() {
     return voltage;
 }
 
+float Power::getVbusCurrent() {
+    if (AXPchip == 1) { // AXP192
+        uint8_t buf[2];
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_VBUS_CUR_H, 2, buf);
+        return ((buf[0] << AXP192_ADC_MSB_SHIFT) | (buf[1] & AXP192_ADC_LSB_MASK)) * AXP192_VBUS_CUR_STEP;
+    } else if (AXPchip == 2) { // AXP2101
+        uint8_t buf[2];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_CUR_H, 2, buf);
+        // AXP2101 VBUS Cur: 14-bit (bits 13:0), 1mA/bit
+        return (float)(((buf[0] & AXP2101_ADC_MSB_MASK) << 8) | buf[1]);
+    }
+    return 0;
+}
+
+float Power::getBatteryChargeCurrent() {
+    if (AXPchip == 1) { // AXP192
+        uint8_t buf[2];
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_BAT_AVERCHGCUR_H, 2, buf);
+        return ((buf[0] << AXP192_CUR_MSB_SHIFT) | (buf[1] & AXP192_CUR_LSB_MASK)) * AXP192_CUR_STEP;
+    } else if (AXPchip == 2) { // AXP2101
+        uint8_t buf[2];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_CHG_CUR_H, 2, buf);
+        // AXP2101 IBAT Chg ADC: 14-bit (bits 13:0), 1mA/bit
+        return (float)(((buf[0] & AXP2101_ADC_MSB_MASK) << 8) | buf[1]);
+    }
+    return 0;
+}
+
+float Power::getBatteryDischargeCurrent() {
+    if (AXPchip == 1) { // AXP192
+        uint8_t buf[2];
+        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_BAT_AVERDISCHGCUR_H, 2, buf);
+        return ((buf[0] << AXP192_CUR_MSB_SHIFT) | (buf[1] & AXP192_CUR_LSB_MASK)) * AXP192_CUR_STEP;
+    } else if (AXPchip == 2) { // AXP2101
+        uint8_t buf[2];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_DISCHG_CUR_H, 2, buf);
+        // AXP2101 IBAT Dischg ADC: 14-bit (bits 13:0), 1mA/bit
+        return (float)(((buf[0] & AXP2101_ADC_MSB_MASK) << 8) | buf[1]);
+    }
+    return 0;
+}
+
+float Power::getSystemCurrent() {
+    float vbus = getVbusCurrent();
+    float batt = getBatteryCurrent();
+    // System current draw from the main power rail
+    return vbus - batt;
+}
+
 float Power::getDieTemperature() {
     if (AXPchip == 1) { // AXP192
         uint8_t buf[2];
         I2Cread(AXP192_SLAVE_ADDRESS, AXP192_DIE_TEMP_H, 2, buf);
-        uint16_t raw = (buf[0] << 4) | (buf[1] & 0x0F);
-        return raw * 0.1 - 144.7;
+        uint16_t raw = (buf[0] << AXP192_ADC_MSB_SHIFT) | (buf[1] & AXP192_ADC_LSB_MASK);
+        return raw * AXP192_DIE_TEMP_STEP + AXP192_DIE_TEMP_OFFSET;
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2];
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_DIE_TEMP_H, 2, buf);
-        // AXP2101: 14-bit, 0.1 degC / bit. Formula: (MSB << 8 | LSB) * 0.1 - 144.7
+        // AXP2101: 14-bit, 0.1 degC / bit. Formula: (MSB << 8 | LSB) * 0.1 - 243.7
         uint16_t raw = ((buf[0] & AXP2101_DIE_TEMP_MSB_MASK) << 8) | buf[1];
-        return raw * 0.1 - 144.7;
+        return (raw * AXP2101_DIE_TEMP_STEP) + AXP2101_DIE_TEMP_OFFSET;
     }
     return 0;
 }
@@ -302,6 +352,10 @@ int Power::getBatteryPercentage() {
         else pct = (v - 3300) / (4100 - 3300) * 100;
     }
     return pct;
+}
+
+uint8_t Power::getChipType() {
+    return AXPchip;
 }
 
 void Power::setGnssPower(bool on) {
@@ -348,19 +402,9 @@ bool Power::isCharging() {
 }
 
 float Power::getBatteryCurrent() {
-    if (AXPchip == 1) { // AXP192
-        uint8_t buf[2];
-        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_BAT_AVERCHGCUR_H, 2, buf);
-        float charge = ((buf[0] << AXP192_BAT_CUR_MSB_SHIFT) | (buf[1] & AXP192_BAT_CUR_LSB_MASK)) * AXP192_BAT_CUR_STEP;
-        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_BAT_AVERDISCHGCUR_H, 2, buf);
-        float discharge = ((buf[0] << AXP192_BAT_CUR_MSB_SHIFT) | (buf[1] & AXP192_BAT_CUR_LSB_MASK)) * AXP192_BAT_CUR_STEP;
-        return charge - discharge;
-    } else if (AXPchip == 2) { // AXP2101
-        uint8_t buf[2];
-        // Read 16-bit signed current from E-Gauge registers 0xA5/0xA6
-        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_CUR_H, 2, buf);
-        int16_t cur = (int16_t)((buf[0] << AXP2101_CUR_MSB_SHIFT) | buf[1]);
-        return (float)cur;
+    if (AXPchip == 1 || AXPchip == 2) {
+        // Net current = Charge current - Discharge current
+        return getBatteryChargeCurrent() - getBatteryDischargeCurrent();
     }
     return 0;
 }
@@ -368,7 +412,11 @@ float Power::getBatteryCurrent() {
 void Power::getPmuData(PmuData* data) {
     data->battVol = getBatteryVoltage();
     data->vbusVol = getVbusVoltage();
-    data->battCur = getBatteryCurrent();
+    data->battChgCur = getBatteryChargeCurrent();
+    data->battDischgCur = getBatteryDischargeCurrent();
+    data->battCur = data->battChgCur - data->battDischgCur;
+    data->vbusCur = getVbusCurrent();
+    data->sysCur = data->vbusCur - data->battCur;
     data->dieTemp = getDieTemperature();
     data->battPct = getBatteryPercentage();
     data->vbusPresent = isVbusPresent();
@@ -383,6 +431,8 @@ void Power::getPmuData(PmuData* data) {
         data->raw_vbusVol = (buf[0] << 8) | buf[1];
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_CUR_H, 2, buf);
         data->raw_battCur = (buf[0] << 8) | buf[1];
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_CUR_H, 2, buf);
+        data->raw_vbusCur = (buf[0] << 8) | buf[1];
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_DIE_TEMP_H, 2, buf);
         data->raw_dieTemp = (buf[0] << 8) | buf[1];
     }
@@ -412,3 +462,29 @@ void Power::clearIRQ() {
         I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS2, irqs[2]);
     }
 }
+
+#else // Non-ESP32 (ESP8266) dummy implementations
+
+Power::Power() : pmuWire(NULL) {}
+void Power::checkAXP() {}
+float Power::getBatteryVoltage() { return 0; }
+int Power::getBatteryPercentage() { return 0; }
+float Power::getVbusVoltage() { return 0; }
+float Power::getVbusCurrent() { return 0; }
+float Power::getBatteryChargeCurrent() { return 0; }
+float Power::getBatteryDischargeCurrent() { return 0; }
+float Power::getSystemCurrent() { return 0; }
+bool Power::isVbusPresent() { return false; }
+bool Power::isCharging() { return false; }
+float Power::getBatteryCurrent() { return 0; }
+float Power::getDieTemperature() { return 0; }
+uint8_t Power::getChipType() { return 0; }
+void Power::getIRQStatus(uint8_t* irqs) { irqs[0] = irqs[1] = irqs[2] = 0; }
+void Power::clearIRQ() {}
+void Power::setGnssPower(bool on) {}
+void Power::deepSleepSensors() {}
+void Power::I2CwriteByte(uint8_t Address, uint8_t Register, uint8_t Data) {}
+uint8_t Power::I2CreadByte(uint8_t Address, uint8_t Register) { return 0; }
+void Power::I2Cread(uint8_t Address, uint8_t Register, uint8_t Nbytes, uint8_t* Data) {}
+
+#endif

@@ -263,21 +263,20 @@ void ConfigManager::handleDashboard()
   bool charging = power.isCharging();
   bool vbus = power.isVbusPresent();
 
-  String pwrSrc = vbus ? "USB/Solar" : "BAT";
+  String pwrSrc = vbus ? "USB/Sol" : "BAT";
   String pwrInfo = " - ";
   
   if (battVol > 100) {
-      pwrInfo = String(battVol/1000.0, 2) + "V (" + String(battPct) + "%";
+      pwrInfo = String(battVol/1000.0, 2) + "V " + String(battPct) + "%";
       if (battCur > 2) {
-          pwrInfo += " <span class='G'>" + String((int)battCur) + "mA</span>";
+          pwrInfo += " <span class='G'>+" + String((int)battCur) + "mA</span>";
       } else if (battCur < -2) {
-          pwrInfo += " <span class='R'>" + String((int)abs(battCur)) + "mA</span>";
+          pwrInfo += " <span class='R'>-" + String((int)abs(battCur)) + "mA</span>";
       } else {
           pwrInfo += " 0mA";
       }
-      pwrInfo += ")";
   }
-  s += "<tr><td>Power </td><td>" + pwrSrc + " " + pwrInfo + "</td></tr>";
+  s += "<tr><td>In: </td><td>" + pwrSrc + " " + pwrInfo + "</td></tr>";
   
   s += F("</table></div>");
 
@@ -446,7 +445,8 @@ void ConfigManager::handleRefreshConsole()
   {
     if (!counter)
     {
-      counter = Log::getLogIdx();
+      // Start from oldest log available in buffer
+      counter = (uint8_t)Log::getOldestLogIdx();
     }
     do
     {
@@ -564,16 +564,15 @@ void ConfigManager::handleRefreshWorldmap()
 
   String pwrLine = "";
   if (battVol > 100) {
-      pwrLine = (vbus ? "USB/Solar " : "BAT ");
-      pwrLine += String(battVol/1000.0, 2) + "V (" + String(battPct) + "%";
+      pwrLine = (vbus ? "USB/Sol " : "BAT ");
+      pwrLine += String(battVol/1000.0, 2) + "V " + String(battPct) + "%";
       if (battCur > 2) {
-          pwrLine += " <span class='G'>" + String((int)battCur) + "mA</span>";
+          pwrLine += " <span class='G'>+" + String((int)battCur) + "mA</span>";
       } else if (battCur < -2) {
-          pwrLine += " <span class='R'>" + String((int)abs(battCur)) + "mA</span>";
+          pwrLine += " <span class='R'>-" + String((int)abs(battCur)) + "mA</span>";
       } else {
           pwrLine += " 0mA";
       }
-      pwrLine += ")";
   }
   data_string += pwrLine + ",";
   
