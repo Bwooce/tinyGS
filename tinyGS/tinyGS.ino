@@ -164,6 +164,23 @@ void setup()
   improvWiFi.setVersion (status.version);
   Log::console (PSTR ("TinyGS Version %d - %s"), status.version, status.git_version);
   Log::console(PSTR("Chip  %s - %d"),  ESP.getChipModel(),ESP.getChipRevision());
+  
+  esp_reset_reason_t reason = esp_reset_reason();
+  const char* resetReasonStr = "Unknown";
+  switch (reason) {
+      case ESP_RST_POWERON: resetReasonStr = "Vbat Power-on reset"; break;
+      case ESP_RST_EXT:     resetReasonStr = "External pin reset"; break;
+      case ESP_RST_SW:      resetReasonStr = "Software reset via esp_restart"; break;
+      case ESP_RST_PANIC:   resetReasonStr = "Software reset due to exception/panic"; break;
+      case ESP_RST_INT_WDT: resetReasonStr = "Software reset due to interrupt watchdog"; break;
+      case ESP_RST_TASK_WDT:resetReasonStr = "Software reset due to task watchdog"; break;
+      case ESP_RST_WDT:     resetReasonStr = "Other watchdogs reset"; break;
+      case ESP_RST_DEEPSLEEP:resetReasonStr = "Reset after exiting deep sleep mode"; break;
+      case ESP_RST_BROWNOUT:resetReasonStr = "Brownout reset (software or hardware)"; break;
+      case ESP_RST_SDIO:    resetReasonStr = "Reset over SDIO"; break;
+      default: break;
+  }
+  Log::console(PSTR("Reset reason: %s (%d)"), resetReasonStr, (int)reason);
   if ((configManager.getMqttServer ()[0] == '\0') || (configManager.getMqttUser ()[0] == '\0') || (configManager.getMqttPass ()[0] == '\0')) {
       mqttCredentials.generateOTPCode ();
   }
@@ -370,6 +387,26 @@ void loop() {
 
   mqtt.loop();
   OTA::loop();
+
+  // Periodic Power Log
+  static unsigned long lastPowerLog = 0;
+  if (millis() - lastPowerLog > 300000) {
+      Power& power = Power::getInstance();
+      float battVol = power.getBatteryVoltage();
+      int battPct = power.getBatteryPercentage();
+      float battCur = power.getBatteryCurrent();
+      bool charging = power.isCharging();
+      bool vbus = power.isVbusPresent();
+      
+      Log::console(PSTR("Power Status: %s, Batt: %.2fV (%d%%), Cur: %dmA (%s)"), 
+          vbus ? "USB" : "Battery",
+          battVol/1000.0,
+          battPct,
+          (int)abs(battCur),
+          battCur > 2 ? "UP" : (battCur < -2 ? "DN" : (charging ? "FULL" : "IDLE"))
+      );
+      lastPowerLog = millis();
+  }
 
   displayUpdate ();
 

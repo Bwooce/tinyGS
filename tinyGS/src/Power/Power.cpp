@@ -305,3 +305,46 @@ void Power::setGnssPower(bool on) {
         I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0, reg);
     }
 }
+
+bool Power::isVbusPresent() {
+    if (AXPchip == 1 || AXPchip == 2) {
+        uint8_t reg = I2CreadByte(0x34, 0x00);
+        return (reg & (1 << 5)) != 0;
+    }
+    return false;
+}
+
+bool Power::isCharging() {
+    if (AXPchip == 1) {
+        uint8_t reg = I2CreadByte(AXP192_SLAVE_ADDRESS, 0x01);
+        return (reg & (1 << 6)) != 0;
+    } else if (AXPchip == 2) {
+        uint8_t reg = I2CreadByte(AXP2101_SLAVE_ADDRESS, 0x01);
+        uint8_t status = reg & 0x07;
+        return (status >= 1 && status <= 4); // 1: Charge start, 2: Charge, 3: Charge end, 4: Over-temp charge
+    }
+    return false;
+}
+
+float Power::getBatteryCurrent() {
+    if (AXPchip == 1) { // AXP192
+        uint8_t buf[2];
+        // Charge current: 13 bit, 0.5mA/bit. Reg 0x7A[12:5], 0x7B[4:0]
+        I2Cread(AXP192_SLAVE_ADDRESS, 0x7A, 2, buf);
+        float charge = ((buf[0] << 5) | (buf[1] & 0x1F)) * 0.5;
+        // Discharge current: 13 bit, 0.5mA/bit. Reg 0x7C[12:5], 0x7D[4:0]
+        I2Cread(AXP192_SLAVE_ADDRESS, 0x7C, 2, buf);
+        float discharge = ((buf[0] << 5) | (buf[1] & 0x1F)) * 0.5;
+        return charge - discharge;
+    } else if (AXPchip == 2) { // AXP2101
+        uint8_t buf[2];
+        // Charge current: 16 bit, 1mA/bit. Reg 0x3C (H), 0x3D (L)
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_CHG_CUR_H, 2, buf);
+        float charge = (float)((buf[0] << 8) | buf[1]);
+        // Discharge current: 16 bit, 1mA/bit. Reg 0x3E (H), 0x3F (L)
+        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_DISCHG_CUR_H, 2, buf);
+        float discharge = (float)((buf[0] << 8) | buf[1]);
+        return charge - discharge;
+    }
+    return 0;
+}
