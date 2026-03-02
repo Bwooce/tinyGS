@@ -143,6 +143,7 @@ void configured()
 {
   configManager.setConfiguredCallback(NULL);
   configManager.printConfig();
+  Power::getInstance().clearIRQ();
   radio.init();
 }
 
@@ -397,14 +398,18 @@ void loop() {
       float battCur = power.getBatteryCurrent();
       bool charging = power.isCharging();
       bool vbus = power.isVbusPresent();
+      uint8_t irqs[3];
+      power.getIRQStatus(irqs);
       
-      Log::console(PSTR("Power Status: %s, Batt: %.2fV (%d%%), Cur: %dmA (%s)"), 
+      Log::console(PSTR("Power Status: %s, Batt: %.2fV (%d%%), Cur: %dmA (%s), IRQs: %02X,%02X,%02X"), 
           vbus ? "USB" : "Battery",
           battVol/1000.0,
           battPct,
           (int)abs(battCur),
-          battCur > 2 ? "UP" : (battCur < -2 ? "DN" : (charging ? "FULL" : "IDLE"))
+          battCur > 2 ? "UP" : (battCur < -2 ? "DN" : (charging ? "FULL" : "IDLE")),
+          irqs[0], irqs[1], irqs[2]
       );
+      power.clearIRQ();
       lastPowerLog = millis();
   }
 

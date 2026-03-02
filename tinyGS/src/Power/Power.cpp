@@ -350,3 +350,28 @@ float Power::getBatteryCurrent() {
     }
     return 0;
 }
+
+void Power::getIRQStatus(uint8_t* irqs) {
+    if (AXPchip == 1) {
+        I2Cread(AXP192_SLAVE_ADDRESS, 0x44, 3, irqs);
+    } else if (AXPchip == 2) {
+        I2Cread(AXP2101_SLAVE_ADDRESS, 0x48, 3, irqs);
+    } else {
+        irqs[0] = irqs[1] = irqs[2] = 0;
+    }
+}
+
+void Power::clearIRQ() {
+    uint8_t irqs[3];
+    if (AXPchip == 1) {
+        I2Cread(AXP192_SLAVE_ADDRESS, 0x44, 3, irqs);
+        I2CwriteByte(AXP192_SLAVE_ADDRESS, 0x44, irqs[0]);
+        I2CwriteByte(AXP192_SLAVE_ADDRESS, 0x45, irqs[1]);
+        I2CwriteByte(AXP192_SLAVE_ADDRESS, 0x46, irqs[2]);
+    } else if (AXPchip == 2) {
+        I2Cread(AXP2101_SLAVE_ADDRESS, 0x48, 3, irqs);
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x48, irqs[0]);
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x49, irqs[1]);
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x4A, irqs[2]);
+    }
+}

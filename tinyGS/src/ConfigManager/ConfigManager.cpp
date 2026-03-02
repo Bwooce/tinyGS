@@ -554,14 +554,28 @@ void ConfigManager::handleRefreshWorldmap()
       data_string += "<span class='R'>NO FIX (" + String(GnssManager::getInstance().getSatellites()) + ")</span>,";
   }
 
-  // Battery Status
-  float battVol = Power::getInstance().getBatteryVoltage();
-  int battPct = Power::getInstance().getBatteryPercentage();
-  if (battVol > 0) { 
-      data_string += String(battVol/1000.0, 2) + "V (" + String(battPct) + "%),";
-  } else {
-      data_string += ",";
+  // Battery Status (Matches dashboard row 7)
+  Power& power = Power::getInstance();
+  float battVol = power.getBatteryVoltage();
+  int battPct = power.getBatteryPercentage();
+  float battCur = power.getBatteryCurrent();
+  bool charging = power.isCharging();
+  bool vbus = power.isVbusPresent();
+
+  String pwrLine = "";
+  if (battVol > 100) {
+      pwrLine = (vbus ? "USB " : "BAT ");
+      pwrLine += String(battVol/1000.0, 2) + "V (" + String(battPct) + "%";
+      if (battCur > 2) {
+          pwrLine += " <span class='G'>" + String((int)battCur) + "mA</span>";
+      } else if (battCur < -2) {
+          pwrLine += " <span class='R'>" + String((int)abs(battCur)) + "mA</span>";
+      } else {
+          pwrLine += " 0mA";
+      }
+      pwrLine += ")";
   }
+  data_string += pwrLine + ",";
   
   // Old location of currentRssi was here - REMOVED
 

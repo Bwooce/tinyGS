@@ -81,6 +81,8 @@ public:
      bool isVbusPresent();
      bool isCharging();
      float getBatteryCurrent();
+     void getIRQStatus(uint8_t* irqs);
+     void clearIRQ();
      void setGnssPower(bool on);
      void deepSleepSensors();
      TwoWire* getPmuWire() { return pmuWire; }
