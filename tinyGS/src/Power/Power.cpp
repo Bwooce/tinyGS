@@ -329,21 +329,23 @@ bool Power::isCharging() {
 float Power::getBatteryCurrent() {
     if (AXPchip == 1) { // AXP192
         uint8_t buf[2];
-        // Charge current: 13 bit, 0.5mA/bit. Reg 0x7A[12:5], 0x7B[4:0]
         I2Cread(AXP192_SLAVE_ADDRESS, 0x7A, 2, buf);
         float charge = ((buf[0] << 5) | (buf[1] & 0x1F)) * 0.5;
-        // Discharge current: 13 bit, 0.5mA/bit. Reg 0x7C[12:5], 0x7D[4:0]
         I2Cread(AXP192_SLAVE_ADDRESS, 0x7C, 2, buf);
         float discharge = ((buf[0] << 5) | (buf[1] & 0x1F)) * 0.5;
         return charge - discharge;
     } else if (AXPchip == 2) { // AXP2101
         uint8_t buf[2];
-        // Charge current: 16 bit, 1mA/bit. Reg 0x3C (H), 0x3D (L)
+        // Charge current: 14-bit (bits 13:0)
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_CHG_CUR_H, 2, buf);
-        float charge = (float)((buf[0] << 8) | buf[1]);
-        // Discharge current: 16 bit, 1mA/bit. Reg 0x3E (H), 0x3F (L)
+        uint16_t chargeRaw = ((buf[0] & 0x3F) << 8) | buf[1];
+        float charge = (float)chargeRaw;
+        
+        // Discharge current: 14-bit (bits 13:0)
         I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_BATT_DISCHG_CUR_H, 2, buf);
-        float discharge = (float)((buf[0] << 8) | buf[1]);
+        uint16_t dischargeRaw = ((buf[0] & 0x3F) << 8) | buf[1];
+        float discharge = (float)dischargeRaw;
+        
         return charge - discharge;
     }
     return 0;
