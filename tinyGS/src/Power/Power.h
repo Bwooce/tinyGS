@@ -81,6 +81,7 @@ public:
      bool isVbusPresent();
      bool isCharging();
      float getBatteryCurrent();
+     void getRawPowerData(uint8_t* buf);
      void getIRQStatus(uint8_t* irqs);
      void clearIRQ();
      void setGnssPower(bool on);

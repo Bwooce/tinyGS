@@ -263,7 +263,7 @@ void ConfigManager::handleDashboard()
   bool charging = power.isCharging();
   bool vbus = power.isVbusPresent();
 
-  String pwrSrc = vbus ? "USB" : "BAT";
+  String pwrSrc = vbus ? "USB/Solar" : "BAT";
   String pwrInfo = " - ";
   
   if (battVol > 100) {
@@ -564,7 +564,7 @@ void ConfigManager::handleRefreshWorldmap()
 
   String pwrLine = "";
   if (battVol > 100) {
-      pwrLine = (vbus ? "USB " : "BAT ");
+      pwrLine = (vbus ? "USB/Solar " : "BAT ");
       pwrLine += String(battVol/1000.0, 2) + "V (" + String(battPct) + "%";
       if (battCur > 2) {
           pwrLine += " <span class='G'>" + String((int)battCur) + "mA</span>";

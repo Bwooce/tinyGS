@@ -400,14 +400,18 @@ void loop() {
       bool vbus = power.isVbusPresent();
       uint8_t irqs[3];
       power.getIRQStatus(irqs);
+      uint8_t raw[8];
+      power.getRawPowerData(raw);
       
-      Log::console(PSTR("Power Status: %s, Batt: %.2fV (%d%%), Cur: %dmA (%s), IRQs: %02X,%02X,%02X"), 
-          vbus ? "USB" : "Battery",
+      Log::console(PSTR("Power Status: %s, Batt: %.2fV (%d%%), Cur: %dmA (%s), IRQs: %02X,%02X,%02X, RAW: %02X%02X,%02X%02X / %02X%02X,%02X%02X"), 
+          vbus ? "USB/Solar" : "Battery",
           battVol/1000.0,
           battPct,
           (int)abs(battCur),
           battCur > 2 ? "UP" : (battCur < -2 ? "DN" : (charging ? "FULL" : "IDLE")),
-          irqs[0], irqs[1], irqs[2]
+          irqs[0], irqs[1], irqs[2],
+          raw[0], raw[1], raw[2], raw[3], // Current Chg / Dischg
+          raw[4], raw[5], raw[6], raw[7]  // Batt V / Vbus V
       );
       power.clearIRQ();
       lastPowerLog = millis();

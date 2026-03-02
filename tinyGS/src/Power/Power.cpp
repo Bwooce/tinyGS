@@ -351,6 +351,17 @@ float Power::getBatteryCurrent() {
     return 0;
 }
 
+void Power::getRawPowerData(uint8_t* buf) {
+    if (AXPchip == 2) { // AXP2101
+        // Read 0x3C-0x3F (Currents), 0x34-0x35 (Batt V), 0x38-0x39 (Vbus V)
+        I2Cread(AXP2101_SLAVE_ADDRESS, 0x3C, 4, buf);      // 0,1,2,3
+        I2Cread(AXP2101_SLAVE_ADDRESS, 0x34, 2, buf + 4);  // 4,5
+        I2Cread(AXP2101_SLAVE_ADDRESS, 0x38, 2, buf + 6);  // 6,7
+    } else {
+        memset(buf, 0, 8);
+    }
+}
+
 void Power::getIRQStatus(uint8_t* irqs) {
     if (AXPchip == 1) {
         I2Cread(AXP192_SLAVE_ADDRESS, 0x44, 3, irqs);
