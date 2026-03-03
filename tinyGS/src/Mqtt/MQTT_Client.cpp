@@ -18,6 +18,7 @@
 */
 
 #include "MQTT_Client.h"
+#include "../Display/Display.h"
 #include "ArduinoJson.h"
 #if ARDUINOJSON_USE_LONG_LONG == 0 && !PLATFORMIO
 #error "Using Arduino IDE is not recommended, please follow this guide https://github.com/G4lile0/tinyGS/wiki/Arduino-IDE or edit /ArduinoJson/src/ArduinoJson/Configuration.hpp and amend to #define ARDUINOJSON_USE_LONG_LONG 1 around line 68"
@@ -77,15 +78,16 @@ void MQTT_Client::loop()
     if (configManager.getLowPower()) 
     {
       Radio &radio = Radio::getInstance();
-      uint32_t sleep_seconds = 4*3600; // 4 hours deep sleep. 
-      Log::debug(PSTR("deep_sleep_enter"));
-      esp_sleep_enable_timer_wakeup( 1000000ULL * sleep_seconds); // using ULL  Unsigned Long long
+      uint32_t sleep_seconds = 4*3600; // 4 hours deep sleep
+      Log::console(PSTR("Low power: deep sleep %lu seconds"), (unsigned long)sleep_seconds);
+      esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
+      displayTurnOff();
+      Power::getInstance().setGnssPower(false);
+      radio.moduleSleep();
       delay(100);
       Serial.flush();
       WiFi.disconnect(true);
       delay(100);
-      //  TODO: apagar OLED
-      radio.moduleSleep();
       esp_deep_sleep_start();
       delay(1000);   // shouldn't arrive here
     }
@@ -1096,21 +1098,22 @@ void MQTT_Client::remoteGoToSleep(char *payload, size_t payload_len)
   StaticJsonDocument<64> doc;
   deserializeJson(doc, payload, payload_len);
 
-  uint32_t sleep_seconds = doc[0];                        // max 
-  //uint8_t  int_pin = doc [1];   // 99 no int pin
+  uint32_t sleep_seconds = doc[0];
+  // TODO: ext0 wakeup from radio DIO pin for wake-on-receive (see GitHub issue #83)
+  //uint8_t  int_pin = doc[1];   // 99 = no int pin
+  //esp_sleep_enable_ext0_wakeup((gpio_num_t)int_pin, 0);
 
-  Log::debug(PSTR("deep_sleep_enter"));
-  esp_sleep_enable_timer_wakeup( 1000000ULL * sleep_seconds); // using ULL  Unsigned Long long
-  //esp_sleep_enable_ext0_wakeup(int_pin,0);
+  Log::console(PSTR("Deep sleep: %lu seconds"), (unsigned long)sleep_seconds);
+  esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
+  displayTurnOff();
+  Power::getInstance().setGnssPower(false);
+  radio.moduleSleep();
   delay(100);
   Serial.flush();
   WiFi.disconnect(true);
   delay(100);
-  //  TODO: apagar OLED
-  radio.moduleSleep();
   esp_deep_sleep_start();
   delay(1000);   // shouldn't arrive here
-
 }
 
 
@@ -1119,46 +1122,37 @@ void MQTT_Client::remoteGoToSiesta(char *payload, size_t payload_len)
   StaticJsonDocument<64> doc;
   deserializeJson(doc, payload, payload_len);
 
-  uint32_t sleep_seconds = doc[0];                        // max 
-  //uint8_t  int_pin = doc [1];   // 99 no int pin
+  uint32_t sleep_seconds = doc[0];
+  // TODO: ext0 wakeup from radio DIO pin for wake-on-receive (see GitHub issue #83)
+  //uint8_t  int_pin = doc[1];   // 99 = no int pin
+  //esp_sleep_enable_ext0_wakeup((gpio_num_t)int_pin, 0);
 
-  Log::debug(PSTR("light_sleep_enter"));
-  esp_sleep_enable_timer_wakeup( 1000000ULL * sleep_seconds); // using ULL  Unsigned Long long
-  //esp_sleep_enable_ext0_wakeup(int_pin,0);
+  Log::console(PSTR("Siesta: %lu seconds"), (unsigned long)sleep_seconds);
+  esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
+  displayTurnOff();
+  Power::getInstance().setGnssPower(false);
   delay(100);
   Serial.flush();
   WiFi.disconnect(true);
   delay(100);
   int ret = esp_light_sleep_start();
-  WiFi.disconnect(false);
-  Log::debug(PSTR("light_sleep: %d\n"), ret);
-  // for stations with sleep disable OLED
-  //displayTurnOff();
-  delay(500);
-  esp_sleep_wakeup_cause_t wakeup_reason;
-  wakeup_reason = esp_sleep_get_wakeup_cause();
 
-  switch (wakeup_reason)
-  {
-  case ESP_SLEEP_WAKEUP_EXT0:
-    Log::debug(PSTR("Wakeup caused by external signal using RTC_IO"));
-    break;
-  case ESP_SLEEP_WAKEUP_EXT1:
-    Log::debug(PSTR("Wakeup caused by external signal using RTC_CNTL"));
-    break;
-  case ESP_SLEEP_WAKEUP_TIMER:
-    Log::debug(PSTR("Wakeup caused by timer"));
-    break;
-  case ESP_SLEEP_WAKEUP_TOUCHPAD:
-    Log::debug(PSTR("Wakeup caused by touchpad"));
-    break;
-  case ESP_SLEEP_WAKEUP_ULP:
-    Log::debug(PSTR("Wakeup caused by ULP program"));
-    break;
-  default:
-    Log::debug(PSTR("Wakeup was not caused by deep sleep: %d\n"), wakeup_reason);
-    break;
+  // Waking up - restore peripherals
+  Power::getInstance().setGnssPower(true);
+  WiFi.disconnect(false);
+  delay(500);
+
+  esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+  const char* reason = "unknown";
+  switch (wakeup_reason) {
+    case ESP_SLEEP_WAKEUP_TIMER:    reason = "timer"; break;
+    case ESP_SLEEP_WAKEUP_EXT0:     reason = "ext0"; break;
+    case ESP_SLEEP_WAKEUP_EXT1:     reason = "ext1"; break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD: reason = "touch"; break;
+    case ESP_SLEEP_WAKEUP_ULP:      reason = "ulp"; break;
+    default: break;
   }
+  Log::console(PSTR("Siesta wake: %s (ret=%d)"), reason, ret);
 }
 
 
