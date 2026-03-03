@@ -155,7 +155,6 @@ void configured()
 {
   configManager.setConfiguredCallback(NULL);
   configManager.printConfig();
-  logPmuReport("Boot Power");
   radio.init();
 }
 
