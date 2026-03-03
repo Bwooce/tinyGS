@@ -265,16 +265,33 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>Name </td><td>" + String(getThingName()) + "</td></tr>";
   s += "<tr><td>Version </td><td>" + String(status.version) + "</td></tr>";
   s += "<tr><td>MQTT Server </td><td>" + String(status.mqtt_connected ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + "</td></tr>";
-  s += "<tr><td>WiFi RSSI </td><td>" + String(WiFi.isConnected() ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + "</td></tr>";
+  s += "<tr><td>WiFi RSSI </td><td>" + (WiFi.isConnected() ? String(WiFi.RSSI()) + " dBm" : "<span class='R'>DISCONNECTED</span>") + "</td></tr>";
   s += "<tr><td>Radio </td><td>" + String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + "</td></tr>";
-  s += "<tr><td>Noise floor </td><td>" + String(status.modeminfo.currentRssi) + "</td></tr>";
+  s += "<tr><td>GNSS </td><td> - </td></tr>";
+
   {
-    Power& pmu = Power::getInstance();
-    if (pmu.getChipType() > 0) {
-      s += "<tr><td>Battery </td><td>" + String(pmu.getBatteryVoltage() / 1000.0, 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + "</td></tr>";
-    } else {
-      s += "<tr><td>Battery </td><td>-</td></tr>";
+    Power& power = Power::getInstance();
+    float battVol = power.getBatteryVoltage();
+    int battPct = power.getBatteryPercentage();
+    float battCur = power.getBatteryCurrent();
+    bool vbus = power.isVbusPresent();
+
+    String pwrSrc = vbus ? "USB/Sol" : "BAT";
+    String pwrInfo = " - ";
+
+    if (battVol > 100) {
+        pwrInfo = String(battVol/1000.0, 2) + "V " + String(battPct) + "%";
+        if (power.getChipType() == 1) { // AXP192 has current ADC
+            if (battCur > 2) {
+                pwrInfo += " <span class='G'>+" + String((int)battCur) + "mA</span>";
+            } else if (battCur < -2) {
+                pwrInfo += " <span class='R'>-" + String((int)abs(battCur)) + "mA</span>";
+            } else {
+                pwrInfo += " 0mA";
+            }
+        }
     }
+    s += "<tr><td>Power: </td><td>" + pwrSrc + " " + pwrInfo + "</td></tr>";
   }
   s += F("</table></div>");
 
@@ -283,6 +300,7 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>Modulation </td><td>" + String(status.modeminfo.modem_mode) + "</td></tr>";
   s += "<tr><td>Frequency </td><td>" + String(status.modeminfo.frequency) + "</td></tr>";
   s += "<tr><td>Freq. Offset </td><td>" + String(status.modeminfo.freqOffset) + "</td></tr>";
+  s += "<tr><td>Noise floor </td><td>" + String(status.modeminfo.currentRssi) + "</td></tr>";
 
   if (strcmp(status.modeminfo.modem_mode, "LoRa") == 0)
   {
@@ -494,8 +512,13 @@ void ConfigManager::handleRefreshWorldmap()
   String data_string = cx + "," + cy + ",";
 
   // modem configuration (for modemconfig id table data)
+  // Order: mode, freq, freqOffset, noiseFloor, sf/bitrate, cr/freqDev, bw (7 items)
   data_string += String(status.modeminfo.modem_mode) + "," +
                  String(status.modeminfo.frequency) + "," + String(status.modeminfo.freqOffset) + ",";
+  Radio& radio = Radio::getInstance ();
+  if (status.radio_ready)
+    radio.currentRssi ();
+  data_string += String(status.modeminfo.currentRssi) + ",";
   if (strcmp(status.modeminfo.modem_mode, "LoRa") == 0)
   {
     data_string += String(status.modeminfo.sf) + ",";
@@ -508,34 +531,47 @@ void ConfigManager::handleRefreshWorldmap()
   }
   data_string += String(status.modeminfo.bw) + ",";
 
-
-
   // ground station status (for gsstatus id table data)
+  // Order: name, version, MQTT, WiFi, Radio, GNSS, Power (7 items)
   data_string += String(getThingName()) + ",";
   data_string += String(status.version) + ",";
   data_string += String(status.mqtt_connected ? "<span class='G'>CONNECTED</span>" : "<span class='R'>NOT CONNECTED</span>") + ",";
-  if (WiFi.isConnected())  
+  if (WiFi.isConnected())
   {
     data_string += String(WiFi.RSSI()) + ",";
-  }  
-  else  
+  }
+  else
   {
     data_string += String("<span class='R'>NOT CONNECTED</span>") + ",";
   }
-  data_string += String(Radio::getInstance().isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + ",";
-  Radio& radio = Radio::getInstance ();
-  if (status.radio_ready)
-    radio.currentRssi ();
-  data_string += String(status.modeminfo.currentRssi) + ",";
+  data_string += String(radio.isReady() ? "<span class='G'>READY</span>" : "<span class='R'>NOT READY</span>") + ",";
 
-  // Battery status
+  // GNSS Status
+  data_string += " - ,";
+
+  // Battery Status (matches dashboard Power: row)
   {
-    Power& pmu = Power::getInstance();
-    if (pmu.getChipType() > 0) {
-      data_string += String(pmu.getBatteryVoltage() / 1000.0, 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + ",";
-    } else {
-      data_string += "-,";
+    Power& power = Power::getInstance();
+    float battVol = power.getBatteryVoltage();
+    int battPct = power.getBatteryPercentage();
+    float battCur = power.getBatteryCurrent();
+    bool vbus = power.isVbusPresent();
+
+    String pwrLine = "";
+    if (battVol > 100) {
+        pwrLine = (vbus ? "USB/Sol " : "BAT ");
+        pwrLine += String(battVol/1000.0, 2) + "V " + String(battPct) + "%";
+        if (power.getChipType() == 1) { // AXP192 has current ADC
+            if (battCur > 2) {
+                pwrLine += " <span class='G'>+" + String((int)battCur) + "mA</span>";
+            } else if (battCur < -2) {
+                pwrLine += " <span class='R'>-" + String((int)abs(battCur)) + "mA</span>";
+            } else {
+                pwrLine += " 0mA";
+            }
+        }
     }
+    data_string += pwrLine + ",";
   }
 
    // sat_info
