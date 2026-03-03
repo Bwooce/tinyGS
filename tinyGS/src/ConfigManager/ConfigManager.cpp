@@ -125,12 +125,14 @@ ConfigManager::ConfigManager()
 
   groupBoardConfig.addItem(&boardParam);
   groupBoardConfig.addItem(&oledBrightParam);
-  groupBoardConfig.addItem(&batteryPackParam);
   groupBoardConfig.addItem(&AllowTxParam);
   groupBoardConfig.addItem(&remoteTuneParam);
   groupBoardConfig.addItem(&telemetry3rdParam);
   groupBoardConfig.addItem(&testParam);
   groupBoardConfig.addItem(&autoUpdateParam);
+  groupBoardConfig.addItem(&autoLocationParam);
+  groupBoardConfig.addItem(&gnssIntervalParam);
+  groupBoardConfig.addItem(&batteryPackParam);
   addParameterGroup(&groupBoardConfig);
 
   groupAdvanced.addItem(&boardTemplateParam);
