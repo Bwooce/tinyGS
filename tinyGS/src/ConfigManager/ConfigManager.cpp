@@ -268,7 +268,7 @@ void ConfigManager::handleDashboard()
   s += "<tr><td>Noise floor </td><td>" + String(status.modeminfo.currentRssi) + "</td></tr>";
   {
     Power& pmu = Power::getInstance();
-    if (pmu.getAXPchip() > 0) {
+    if (pmu.getChipType() > 0) {
       s += "<tr><td>Battery </td><td>" + String(pmu.getBatteryVoltage(), 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + "</td></tr>";
     } else {
       s += "<tr><td>Battery </td><td>-</td></tr>";
@@ -529,7 +529,7 @@ void ConfigManager::handleRefreshWorldmap()
   // Battery status
   {
     Power& pmu = Power::getInstance();
-    if (pmu.getAXPchip() > 0) {
+    if (pmu.getChipType() > 0) {
       data_string += String(pmu.getBatteryVoltage(), 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + ",";
     } else {
       data_string += "-,";

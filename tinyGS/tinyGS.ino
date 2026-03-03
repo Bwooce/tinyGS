@@ -108,12 +108,54 @@ void checkButton();
 void setupNTP ();
 void handleSerial ();
 void handleRawSerial ();
+void checkStationStatus();
+
+void logPmuReport(const char* prefix) {
+#if defined(ESP32)
+    Power& power = Power::getInstance();
+    PmuData data;
+    power.getPmuData(&data);
+
+    char irqDesc[64];
+    uint8_t chipType = power.getChipType();
+    Power::decodeIRQs(chipType, data.irqs, irqDesc, sizeof(irqDesc));
+
+    if (chipType == 2) { // AXP2101
+        Log::console(PSTR("%s: %s (%s), %.2fV (%d%%), %.1fC, IRQs: %02X,%02X,%02X [%s]"),
+            prefix,
+            data.vbusPresent ? "USB/Sol" : "Battery",
+            data.charging ? "CHG" : "IDLE",
+            data.battVol/1000.0,
+            data.battPct,
+            data.dieTemp,
+            data.irqs[0], data.irqs[1], data.irqs[2],
+            irqDesc
+        );
+    } else if (chipType == 1) { // AXP192
+        Log::console(PSTR("%s: %s (%s), %.2fV (%d%%), Net: %dmA (C:%dmA, D:%dmA), Sys: %dmA, %.1fC, IRQs: %02X,%02X,%02X [%s]"),
+            prefix,
+            data.vbusPresent ? "USB/Sol" : "Battery",
+            data.charging ? "CHG" : "IDLE",
+            data.battVol/1000.0,
+            data.battPct,
+            (int)data.battCur,
+            (int)data.battChgCur,
+            (int)data.battDischgCur,
+            (int)data.sysCur,
+            data.dieTemp,
+            data.irqs[0], data.irqs[1], data.irqs[2],
+            irqDesc
+        );
+    }
+    power.clearIRQ();
+#endif
+}
 
 void configured()
 {
   configManager.setConfiguredCallback(NULL);
   configManager.printConfig();
-  Power::getInstance().checkAXP();
+  logPmuReport("Boot Power");
   radio.init();
 }
 
@@ -157,6 +199,8 @@ void setup()
   configManager.setWifiConnectionCallback(wifiConnected);
   configManager.setConfiguredCallback(configured);
   configManager.init();
+  Power::getInstance().checkAXP();
+  logPmuReport("Boot Power");
   if (configManager.isFailSafeActive())
   {
     configManager.setConfiguredCallback(NULL);
@@ -329,6 +373,13 @@ void loop() {
 
   displayUpdate ();
   Power::getInstance().checkPmuStatus();
+
+  // Periodic Power Log (every 5 minutes)
+  static unsigned long lastPowerLog = 0;
+  if (millis() - lastPowerLog > 300000) {
+      logPmuReport("Power Status");
+      lastPowerLog = millis();
+  }
 
   if (configManager.askedWebLogin () && mqtt.connected ())
   {
