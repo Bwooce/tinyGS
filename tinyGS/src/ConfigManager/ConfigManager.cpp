@@ -271,7 +271,7 @@ void ConfigManager::handleDashboard()
   {
     Power& pmu = Power::getInstance();
     if (pmu.getChipType() > 0) {
-      s += "<tr><td>Battery </td><td>" + String(pmu.getBatteryVoltage(), 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + "</td></tr>";
+      s += "<tr><td>Battery </td><td>" + String(pmu.getBatteryVoltage() / 1000.0, 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + "</td></tr>";
     } else {
       s += "<tr><td>Battery </td><td>-</td></tr>";
     }
@@ -532,7 +532,7 @@ void ConfigManager::handleRefreshWorldmap()
   {
     Power& pmu = Power::getInstance();
     if (pmu.getChipType() > 0) {
-      data_string += String(pmu.getBatteryVoltage(), 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + ",";
+      data_string += String(pmu.getBatteryVoltage() / 1000.0, 2) + "V (" + String(pmu.getBatteryPercentage()) + "%) - " + String(pmu.getChargeStateStr()) + ",";
     } else {
       data_string += "-,";
     }
