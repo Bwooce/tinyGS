@@ -48,8 +48,9 @@ inline bool configurePmuWakeup() {
     return false;
   // Clear any pending PMU IRQs before configuring ext1
   Power::getInstance().checkPmuStatus(true);
-  // If pin is still LOW after clearing, disable ext1 (would cause instant wake)
+  // If pin is still LOW after clearing, read what re-asserted and skip ext1
   if (digitalRead(pin) == LOW) {
+    Power::getInstance().checkPmuStatus(true);  // logs which flags re-asserted
     Log::console(PSTR("AutoLP: PMU IRQ still low after clear, skipping ext1"));
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT1);
     return false;
