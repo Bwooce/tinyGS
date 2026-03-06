@@ -30,9 +30,10 @@ struct PacketInfo {
   char time[20] = "Waiting";
   time_t unix_time = 0;              // epoch seconds at reception
   int64_t usec_time = 0;             // epoch microseconds at reception
+  char satellite[25] = "";
   float rssi = 0;
   float snr = 0;
-  float frequencyerror = 0;       // Hz 
+  float frequencyerror = 0;       // Hz
   bool  crc_error = false;
   float freqDoppler = 0;          // Hz
 

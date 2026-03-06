@@ -25,6 +25,7 @@
 #endif
 #include "mbedtls/base64.h"
 #include "../Radio/Radio.h"
+#include "../Radio/RadioSleep.h"
 #include "../OTA/OTA.h"
 #include "../Logger/Logger.h"
 #include "../Power/Power.h"
@@ -77,13 +78,14 @@ void MQTT_Client::loop()
     ConfigManager &configManager = ConfigManager::getInstance();
     if (configManager.getLowPower()) 
     {
-      Radio &radio = Radio::getInstance();
       uint32_t sleep_seconds = 4*3600; // 4 hours deep sleep
       Log::console(PSTR("Low power: deep sleep %lu seconds"), (unsigned long)sleep_seconds);
       esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
+      configureRadioWakeup();  // ext0 wake on packet
+      configurePmuWakeup();  // ext1 wake on PWR button
       displayTurnOff();
       Power::getInstance().setGnssPower(false);
-      radio.moduleSleep();
+      // Radio stays in RX for ext0 wakeup
       delay(100);
       Serial.flush();
       WiFi.disconnect(true);
@@ -1094,20 +1096,24 @@ void MQTT_Client::remoteSatFilter(char *payload, size_t payload_len)
 
 void MQTT_Client::remoteGoToSleep(char *payload, size_t payload_len)
 {
-  Radio &radio = Radio::getInstance();
   StaticJsonDocument<64> doc;
   deserializeJson(doc, payload, payload_len);
-
   uint32_t sleep_seconds = doc[0];
-  // TODO: ext0 wakeup from radio DIO pin for wake-on-receive (see GitHub issue #83)
-  //uint8_t  int_pin = doc[1];   // 99 = no int pin
-  //esp_sleep_enable_ext0_wakeup((gpio_num_t)int_pin, 0);
 
-  Log::console(PSTR("Deep sleep: %lu seconds"), (unsigned long)sleep_seconds);
+  // Configure ext0 wakeup from radio DIO pin (wake on packet received)
+  int8_t irq_pin = getRadioIrqPin();
+  if (irq_pin >= 0) {
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)irq_pin, 1);
+    Log::console(PSTR("Deep sleep: %lu seconds, ext0 wake on GPIO %d"), (unsigned long)sleep_seconds, irq_pin);
+  } else {
+    Log::console(PSTR("Deep sleep: %lu seconds"), (unsigned long)sleep_seconds);
+  }
+
   esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
+  configurePmuWakeup();
   displayTurnOff();
   Power::getInstance().setGnssPower(false);
-  radio.moduleSleep();
+  // Radio stays in RX for wake-on-packet
   delay(100);
   Serial.flush();
   WiFi.disconnect(true);
@@ -1121,16 +1127,22 @@ void MQTT_Client::remoteGoToSiesta(char *payload, size_t payload_len)
 {
   StaticJsonDocument<64> doc;
   deserializeJson(doc, payload, payload_len);
-
   uint32_t sleep_seconds = doc[0];
-  // TODO: ext0 wakeup from radio DIO pin for wake-on-receive (see GitHub issue #83)
-  //uint8_t  int_pin = doc[1];   // 99 = no int pin
-  //esp_sleep_enable_ext0_wakeup((gpio_num_t)int_pin, 0);
 
-  Log::console(PSTR("Siesta: %lu seconds"), (unsigned long)sleep_seconds);
+  // Configure ext0 wakeup from radio DIO pin (wake on packet received)
+  int8_t irq_pin = getRadioIrqPin();
+  if (irq_pin >= 0) {
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)irq_pin, 1);
+    Log::console(PSTR("Siesta: %lu seconds, ext0 wake on GPIO %d"), (unsigned long)sleep_seconds, irq_pin);
+  } else {
+    Log::console(PSTR("Siesta: %lu seconds (no ext0 pin)"), (unsigned long)sleep_seconds);
+  }
+
   esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
+  configurePmuWakeup();
   displayTurnOff();
   Power::getInstance().setGnssPower(false);
+  // Radio stays in RX mode for wake-on-packet
   delay(100);
   Serial.flush();
   WiFi.disconnect(true);
@@ -1146,7 +1158,7 @@ void MQTT_Client::remoteGoToSiesta(char *payload, size_t payload_len)
   const char* reason = "unknown";
   switch (wakeup_reason) {
     case ESP_SLEEP_WAKEUP_TIMER:    reason = "timer"; break;
-    case ESP_SLEEP_WAKEUP_EXT0:     reason = "ext0"; break;
+    case ESP_SLEEP_WAKEUP_EXT0:     reason = "ext0 (packet)"; break;
     case ESP_SLEEP_WAKEUP_EXT1:     reason = "ext1"; break;
     case ESP_SLEEP_WAKEUP_TOUCHPAD: reason = "touch"; break;
     case ESP_SLEEP_WAKEUP_ULP:      reason = "ulp"; break;

@@ -26,7 +26,7 @@
 OLEDDisplay* display;
 OLEDDisplayUi* ui = NULL;
 
-#define DISPLAY_TIMEOUT 300000  // 5 minutes
+// Display timeout now uses ConfigManager::getWakeTimeout()
 static unsigned long lastDisplayActivity = 0;
 static bool displayTimedOut = false;
 
@@ -370,7 +370,7 @@ void displayUpdate()
   uint8_t oledBright = ConfigManager::getInstance().getOledBright();
 
   // Check display timeout
-  if (oledBright && !displayTimedOut && (millis() - lastDisplayActivity > DISPLAY_TIMEOUT)) {
+  if (oledBright && !displayTimedOut && (millis() - lastDisplayActivity > (unsigned long)ConfigManager::getInstance().getWakeTimeout() * 1000UL)) {
     displayTimedOut = true;
     display->displayOff();
     return;
@@ -416,4 +416,9 @@ void displayTurnOff()
 void displayNextFrame() {
   if (ui)
     ui->nextFrame();
+}
+
+bool displayIsAwake()
+{
+  return !displayTimedOut;
 }

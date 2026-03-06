@@ -32,6 +32,12 @@ byte irqstat0;
 byte irqstat1;
 byte irqstat2;
 
+static volatile bool pmuIrqFired = false;
+
+void IRAM_ATTR Power::pmuIrqHandler() {
+    pmuIrqFired = true;
+}
+
 #define LEGACY_BATT_PIN 36
 
 // All register defines, bitmasks, and IRQ bit definitions are in Power.h
@@ -235,6 +241,10 @@ void Power::checkAXP()
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHGLED_SET, 0x01);       // set CHGLED for 'type A' and enable pin function
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_PEK_SET, 0x00);       // set IRQLevel/OFFLevel/ONLevel to minimum (1S/4S/128mS)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ADC_CONFIG, 0xFF);       // enable ADC for SYS, VBUS, TS and Battery
+    // Configure IRQ enables: disable noisy sources (GAUGE_NEW_SOC, WDT, CHG_START, PKEY edges)
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE0, 0xCF);  // bat temp, SOC warn levels
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE1, 0xFC);  // VBUS, battery, button short/long press
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE2, 0x77);  // bat OV, charger timer, die OT, chg done, overcurrent
     pmustat1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS1);
     pmustat2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
     pwronsta = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_PWRON_STATUS);
@@ -248,6 +258,11 @@ void Power::checkAXP()
       decodeIRQs(2, irqs, irqDesc, sizeof(irqDesc));
       Log::console(PSTR("IRQ status 0,1,2    : %02X,%02X,%02X [%s]"), irqstat0, irqstat1, irqstat2, irqDesc);
     }
+    { uint8_t en0 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE0);
+      uint8_t en1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE1);
+      uint8_t en2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE2);
+      Log::console(PSTR("IRQ enable 0,1,2    : %02X,%02X,%02X"), en0, en1, en2);
+    }
 
 #if CONFIG_IDF_TARGET_ESP32S3
     if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
@@ -256,6 +271,28 @@ void Power::checkAXP()
 #endif
   }
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+  // Attach PMU IRQ interrupt (active-low, open-drain from AXP)
+  if (AXPchip) {
+#if CONFIG_IDF_TARGET_ESP32S3
+    if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
+        pmuIrqPin = SUPREME_PMU_IRQ;
+    }
+#else
+    if (boardIdx == TBEAM_OLED_LF || boardIdx == TBEAM_OLED_HF ||
+        boardIdx == TBEAM_OLED_v1_0 || boardIdx == TBEAM_OLED_v1_0_HF) {
+        pmuIrqPin = TBEAM_PMU_IRQ;
+    }
+#endif
+    if (pmuIrqPin >= 0) {
+        pinMode(pmuIrqPin, INPUT_PULLUP);
+        clearIRQ();
+        pmuIrqFired = false;
+        attachInterrupt(digitalPinToInterrupt(pmuIrqPin), pmuIrqHandler, FALLING);
+        Log::console(PSTR("PMU: IRQ on GPIO %d"), pmuIrqPin);
+    }
+  }
+
   Wire.end();
 }
 
@@ -498,11 +535,12 @@ const char* Power::getChargeStateStr() {
         uint8_t status2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
         uint8_t chgState = status2 & AXP2101_CHG_STATUS_MASK;
         switch (chgState) {
-          case 0: return "Idle";
+          case 0: return "Tri-charge";
           case 1: return "Pre-charge";
           case 2: return "CC charging";
           case 3: return "CV charging";
           case 4: return "Done";
+          case 5: return "Not charging";
           default: return "Unknown";
         }
     } else if (AXPchip == 1) {
@@ -526,7 +564,8 @@ void Power::getPmuData(PmuData* data) {
     data->battPct = getBatteryPercentage();
     data->vbusPresent = isVbusPresent();
     data->charging = isCharging();
-    getIRQStatus(data->irqs);
+    // IRQs are handled by interrupt-driven checkPmuStatus(), not here
+    data->irqs[0] = data->irqs[1] = data->irqs[2] = 0;
 
     if (AXPchip == 2) { // AXP2101
         uint8_t buf[2];
@@ -564,61 +603,88 @@ void Power::clearIRQ() {
     }
 }
 
-void Power::checkPmuStatus() {
+void Power::checkPmuStatus(bool force) {
     if (AXPchip == 0) return;
 
+    // IRQ-driven: handle PMU interrupts immediately
+    // For boards without IRQ pin wired, poll on periodic cadence instead
+    // force=true bypasses the IRQ gate (used during sleep wake handling)
+    bool checkIrqs = force || pmuIrqFired;
+    if (pmuIrqFired) pmuIrqFired = false;
+    if (!checkIrqs && pmuIrqPin < 0) {
+        // Fallback: poll IRQs every 60s on boards without IRQ pin
+        static unsigned long lastIrqPoll = 0;
+        unsigned long now = millis();
+        if (now - lastIrqPoll >= 60000) {
+            lastIrqPoll = now;
+            checkIrqs = true;
+        }
+    }
+    if (checkIrqs) {
+
+        if (AXPchip == 2) {
+            uint8_t irqs[3];
+            I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, 3, irqs);
+            if (irqs[0]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, irqs[0]);
+            if (irqs[1]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS1, irqs[1]);
+            if (irqs[2]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS2, irqs[2]);
+
+            if (irqs[0] || irqs[1] || irqs[2]) {
+                char irqDesc[64];
+                decodeIRQs(2, irqs, irqDesc, sizeof(irqDesc));
+                Log::console(PSTR("PMU IRQ: %02X,%02X,%02X [%s]"), irqs[0], irqs[1], irqs[2], irqDesc);
+            }
+            if (irqs[1] & AXP2101_IRQ1_PKEY_SHORT_PRESS) {
+                pwrButtonPressed = true;
+                Log::console(PSTR("PMU: PWR button pressed"));
+            }
+            if (irqs[2] & AXP2101_IRQ2_CHARGER_TIMER) {
+                Log::console(PSTR("PMU WARNING: Charge safety timer expired - check battery pack config"));
+            }
+            if (irqs[2] & AXP2101_IRQ2_CHG_DONE) {
+                Log::console(PSTR("PMU: Charge complete"));
+            }
+        } else if (AXPchip == 1) {
+            uint8_t irqs[3];
+            I2Cread(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS1, 3, irqs);
+            uint8_t irq4 = I2CreadByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS4);
+            if (irqs[0]) I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS1, irqs[0]);
+            if (irqs[1]) I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS2, irqs[1]);
+            if (irqs[2]) I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS3, irqs[2]);
+            if (irq4) I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS4, irq4);
+
+            if (irqs[0] || irqs[1] || irqs[2] || irq4) {
+                char irqDesc[64];
+                decodeIRQs(1, irqs, irqDesc, sizeof(irqDesc));
+                Log::console(PSTR("PMU IRQ: %02X,%02X,%02X,%02X [%s]"), irqs[0], irqs[1], irqs[2], irq4, irqDesc);
+            }
+            if (irqs[1] & AXP192_IRQ2_PEK_SHORT_PRESS) {
+                pwrButtonPressed = true;
+                Log::console(PSTR("PMU: PWR button pressed"));
+            }
+        }
+    }
+
+    // Periodic status report (every 5 minutes)
     unsigned long now = millis();
-    if (now - lastPmuCheck < 60000) return;
-    lastPmuCheck = now;
+    if (now - lastPmuReport < 300000) return;
+    lastPmuReport = now;
 
     float vbat = getBatteryVoltage();
     int pct = getBatteryPercentage();
     const char* stateStr = getChargeStateStr();
+    float temp = getDieTemperature();
+    bool vbus = isVbusPresent();
 
     if (AXPchip == 2) {
-        // AXP2101 charge state from STATUS2[2:0]
-        Log::debug(PSTR("PMU: %s, Vbat=%.0fmV (%d%%)"), stateStr, vbat, pct);
-
-        // Read and clear IRQ status (write-1-to-clear)
-        uint8_t irqs[3];
-        I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, 3, irqs);
-        if (irqs[0]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, irqs[0]);
-        if (irqs[1]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS1, irqs[1]);
-        if (irqs[2]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS2, irqs[2]);
-
-        if (irqs[0] || irqs[1] || irqs[2]) {
-            char irqDesc[64];
-            decodeIRQs(2, irqs, irqDesc, sizeof(irqDesc));
-            Log::console(PSTR("PMU IRQ: %02X,%02X,%02X [%s]"), irqs[0], irqs[1], irqs[2], irqDesc);
-        }
-        // IRQ2 bit 1 = charge safety timer expired
-        if (irqs[2] & AXP2101_IRQ2_CHG_START) {
-            // bit 1 is actually BAT_OVER_VOLTAGE (0x01) -- safety timer is bit 6 (WDT_EXPIRE)
-        }
-        if (irqs[2] & 0x02) {
-            Log::console(PSTR("PMU WARNING: Charge safety timer expired - check battery pack config"));
-        }
-        if (irqs[2] & AXP2101_IRQ2_CHG_DONE) {
-            Log::console(PSTR("PMU: Charge complete"));
-        }
+        Log::console(PSTR("Power: %s (%s), %.2fV (%d%%), %.1fC"),
+            vbus ? "USB/Sol" : "Battery", stateStr, vbat/1000.0, pct, temp);
     } else if (AXPchip == 1) {
-        // AXP192 charge state
-        Log::debug(PSTR("PMU: %s, Vbat=%.0fmV (%d%%)"), stateStr, vbat, pct);
-
-        // Read and clear IRQ status
-        uint8_t irqs[3];
-        I2Cread(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS1, 3, irqs);
-        uint8_t irq4 = I2CreadByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS4);
-        if (irqs[0]) I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS1, irqs[0]);
-        if (irqs[1]) I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS2, irqs[1]);
-        if (irqs[2]) I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS3, irqs[2]);
-        if (irq4) I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_IRQ_STATUS4, irq4);
-
-        if (irqs[0] || irqs[1] || irqs[2] || irq4) {
-            char irqDesc[64];
-            decodeIRQs(1, irqs, irqDesc, sizeof(irqDesc));
-            Log::console(PSTR("PMU IRQ: %02X,%02X,%02X,%02X [%s]"), irqs[0], irqs[1], irqs[2], irq4, irqDesc);
-        }
+        float chgCur = getBatteryChargeCurrent();
+        float dischgCur = getBatteryDischargeCurrent();
+        Log::console(PSTR("Power: %s (%s), %.2fV (%d%%), C:%dmA D:%dmA, %.1fC"),
+            vbus ? "USB/Sol" : "Battery", stateStr, vbat/1000.0, pct,
+            (int)chgCur, (int)dischgCur, temp);
     }
 }
 
@@ -640,6 +706,7 @@ void Power::decodeIRQs(uint8_t chipType, const uint8_t* irqs, char* desc, size_t
         if (irqs[1] & AXP2101_IRQ1_VBUS_REMOVED)        strlcat(desc, "V- ", descLen);
         if (irqs[1] & AXP2101_IRQ1_VBUS_INSERTED)       strlcat(desc, "V+ ", descLen);
         if (irqs[2] & AXP2101_IRQ2_BAT_OVER_VOLTAGE)    strlcat(desc, "BOV ", descLen);
+        if (irqs[2] & AXP2101_IRQ2_CHARGER_TIMER)       strlcat(desc, "CT! ", descLen);
         if (irqs[2] & AXP2101_IRQ2_DIE_OVER_TEMP)       strlcat(desc, "OT! ", descLen);
         if (irqs[2] & AXP2101_IRQ2_CHG_START)           strlcat(desc, "C+ ", descLen);
         if (irqs[2] & AXP2101_IRQ2_CHG_DONE)            strlcat(desc, "C= ", descLen);
@@ -661,6 +728,12 @@ void Power::decodeIRQs(uint8_t chipType, const uint8_t* irqs, char* desc, size_t
         if (irqs[2] & AXP192_IRQ2_CHIP_OVER_TEMP)       strlcat(desc, "OT! ", descLen);
     }
 }
+bool Power::wasPwrButtonPressed() {
+    bool pressed = pwrButtonPressed;
+    pwrButtonPressed = false;
+    return pressed;
+}
+
 
 #else // Non-ESP32 (ESP8266) dummy implementations
 
@@ -679,6 +752,7 @@ bool Power::isCharging() { return false; }
 float Power::getBatteryCurrent() { return 0; }
 float Power::getDieTemperature() { return 0; }
 uint8_t Power::getChipType() { return 0; }
+bool Power::wasPwrButtonPressed() { return false; }
 const char* Power::getChargeStateStr() { return "No PMU"; }
 void Power::checkPmuStatus() {}
 void Power::getIRQStatus(uint8_t* irqs) { irqs[0] = irqs[1] = irqs[2] = 0; }

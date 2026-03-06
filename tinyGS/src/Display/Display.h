@@ -33,6 +33,7 @@ void displayUpdate();
 void displayTurnOff();
 void displayNextFrame();
 void displayResetTimeout();
+bool displayIsAwake();
 
 extern OLEDDisplay* display;
 extern Status status;

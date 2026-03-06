@@ -360,6 +360,7 @@ void ConfigManager::handleDashboard()
 
 
   s += F("</table></div><div class=\"card\"><h3>Last Packet Received</h3><table id=""lastpacket"">");
+  s += "<tr><td>Satellite </td><td>" + String(status.lastPacketInfo.satellite) + "</td></tr>";
   s += "<tr><td>Received at </td><td>" + String(status.lastPacketInfo.time) + "</td></tr>";
   s += "<tr><td>Signal RSSI </td><td>" + String(status.lastPacketInfo.rssi) + "</td></tr>";
   s += "<tr><td>Signal SNR </td><td>" + String(status.lastPacketInfo.snr) + "</td></tr>";
@@ -623,6 +624,7 @@ else {
  
 
   // last packet received data (for lastpacket id table data)
+  data_string += String(status.lastPacketInfo.satellite) + ",";
   data_string += String(status.lastPacketInfo.time) + ",";
   data_string += String(status.lastPacketInfo.rssi) + ",";
   data_string += String(status.lastPacketInfo.snr) + ",";
@@ -996,6 +998,16 @@ void ConfigManager::parseAdvancedConf()
   if (doc.containsKey(F("lowPower")))
   {
     advancedConf.lowPower = doc["lowPower"];
+  }
+
+  if (doc.containsKey(F("autoLowPower")))
+  {
+    advancedConf.autoLowPower = doc["autoLowPower"];
+  }
+
+  if (doc.containsKey(F("wakeTimeout")))
+  {
+    advancedConf.wakeTimeout = doc["wakeTimeout"];
   }
 }
 

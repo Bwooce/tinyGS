@@ -75,7 +75,11 @@ constexpr auto configVersion = "0.05"; //max 4 chars
 #define SUPREME_GNSS_WAKEUP 7
 #define SUPREME_PMU_SDA 42
 #define SUPREME_PMU_SCL 41
+#define SUPREME_PMU_IRQ 16
 #define SUPREME_LED 3
+
+// T-Beam V1.0/V1.1 PMU IRQ pin (AXP192, GPIO 35 is input-only on ESP32)
+#define TBEAM_PMU_IRQ 35
 
 constexpr auto AP_TIMEOUT_MS = "300000";
 
@@ -161,6 +165,8 @@ typedef struct
   bool flipOled = true;
   bool dnOled = true;
   bool lowPower = false;
+  bool autoLowPower = false;
+  uint16_t wakeTimeout = 300;  // seconds, shared with display timeout
 } AdvancedConfig;
 
 class ConfigManager : public IotWebConf2
@@ -256,6 +262,8 @@ public:
   bool getFlipOled() { return advancedConf.flipOled; }
   bool getDayNightOled() { return advancedConf.dnOled; }
   bool getLowPower() { return advancedConf.lowPower; }
+  bool getAutoLowPower() { return advancedConf.autoLowPower; }
+  uint16_t getWakeTimeout() { return advancedConf.wakeTimeout; }
   bool getBoardConfig(board_t &board)
   {
     bool ret = true;

@@ -547,6 +547,8 @@ uint8_t Radio::listen()
   status.lastPacketInfo.rssi = newPacketInfo.rssi;
   status.lastPacketInfo.snr = newPacketInfo.snr;
   status.lastPacketInfo.frequencyerror = newPacketInfo.frequencyerror;
+  strncpy(status.lastPacketInfo.satellite, status.modeminfo.satellite, sizeof(status.lastPacketInfo.satellite) - 1);
+  status.lastPacketInfo.satellite[sizeof(status.lastPacketInfo.satellite) - 1] = '\0';
 
   // print RSSI (Received Signal Strength Indicator) - use async to avoid blocking
   Log::consoleAsync(PSTR("[%s] RSSI:\t\t%f dBm\n[%s] SNR:\t\t%f dB\n[%s] Frequency error:\t%f Hz"),

@@ -126,7 +126,11 @@
 #define AXP2101_VSYS_VOLT_L         0x3B
 #define AXP2101_DIE_TEMP_H          0x3C
 #define AXP2101_DIE_TEMP_L          0x3D
-// Registers 0x40-0x43 are IRQ Enable registers (INTEN1-3), NOT current ADC
+// IRQ Enable registers
+#define AXP2101_IRQ_ENABLE0         0x40
+#define AXP2101_IRQ_ENABLE1         0x41
+#define AXP2101_IRQ_ENABLE2         0x42
+// IRQ Status registers (write-1-to-clear)
 #define AXP2101_IRQ_STATUS0         0x48
 #define AXP2101_IRQ_STATUS1         0x49
 #define AXP2101_IRQ_STATUS2         0x4A
@@ -280,16 +284,18 @@ public:
      void clearIRQ();
      static void decodeIRQs(uint8_t chipType, const uint8_t* irqs, char* desc, size_t descLen);
 
-     // Periodic PMU status check, self-gated to run every 60 seconds.
-     // Reads charge state, clears IRQ registers, logs status and
-     // warns on safety timer expiry. Call from main loop.
-     void checkPmuStatus();
+     // PMU status check. Call from main loop.
+     // Handles IRQ events immediately (interrupt-driven) and
+     // periodic status reporting (voltage/percent/temp) every 5 minutes.
+     void checkPmuStatus(bool force = false);
 
      // Return human-readable charge state string for display/web UI.
      // e.g. "Charging (CC)", "Done", "Not charging", "Pre-charge"
      const char* getChargeStateStr();
 
      void setGnssPower(bool on);
+     bool wasPwrButtonPressed();
+     int8_t getPmuIrqPin() { return pmuIrqPin; }
      void deepSleepSensors();
      TwoWire* getPmuWire() { return pmuWire; }
      Power();
@@ -298,6 +304,9 @@ private:
     uint8_t I2CreadByte(uint8_t Address, uint8_t Register);
     void I2Cread(uint8_t Address, uint8_t Register, uint8_t Nbytes, uint8_t* Data);
     TwoWire* pmuWire;
-    unsigned long lastPmuCheck = 0;
+    unsigned long lastPmuReport = 0;
+    int8_t pmuIrqPin = -1;
+    bool pwrButtonPressed = false;
+    static void IRAM_ATTR pmuIrqHandler();
 };
 #endif
