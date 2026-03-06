@@ -39,20 +39,17 @@ inline bool configureRadioWakeup() {
   return true;
 }
 
-// Configure ext1 wakeup on the PMU IRQ pin (LOW = AXP button press).
-// Clears pending PMU IRQs first to avoid instant wake.
-// Returns true if configured, false if no pin or pin already LOW.
-inline bool configurePmuWakeup() {
-  int8_t pin = Power::getInstance().getPmuIrqPin();
-  if (pin < 0)
+// Configure ext1 wakeup on the BOOT button (GPIO 0, active LOW).
+// Returns true if configured, false if button already pressed.
+inline bool configureButtonWakeup() {
+  board_t board;
+  if (!ConfigManager::getInstance().getBoardConfig(board))
     return false;
-  // Clear any pending PMU IRQs before configuring ext1
-  Power::getInstance().checkPmuStatus(true);
-  // If pin is still LOW after clearing, read what re-asserted and skip ext1
+  uint8_t pin = board.PROG__BUTTON;
+  if (pin == UNUSED)
+    return false;
   if (digitalRead(pin) == LOW) {
-    Power::getInstance().checkPmuStatus(true);  // logs which flags re-asserted
-    Log::console(PSTR("AutoLP: PMU IRQ still low after clear, skipping ext1"));
-    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT1);
+    Log::console(PSTR("AutoLP: BOOT button held, skipping ext1"));
     return false;
   }
   esp_sleep_enable_ext1_wakeup(1ULL << pin, ESP_EXT1_WAKEUP_ANY_LOW);

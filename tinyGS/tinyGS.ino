@@ -332,7 +332,7 @@ void enterPassSleep(uint32_t sleep_secs) {
 
   esp_sleep_enable_timer_wakeup(1000000ULL * sleep_secs);
   configureRadioWakeup();
-  configurePmuWakeup();
+  configureButtonWakeup();
 
   displayTurnOff();
   Power::getInstance().setGnssPower(false);
@@ -353,14 +353,13 @@ void enterPassSleep(uint32_t sleep_secs) {
   switch (reason) {
     case ESP_SLEEP_WAKEUP_TIMER:    reason_str = "timer"; break;
     case ESP_SLEEP_WAKEUP_EXT0:     reason_str = "ext0 (packet)"; break;
-    case ESP_SLEEP_WAKEUP_EXT1:     reason_str = "ext1 (PMU)"; break;
+    case ESP_SLEEP_WAKEUP_EXT1:     reason_str = "ext1 (button)"; break;
     default: break;
   }
   unsigned long sleptMs = millis() - sleepStartMillis;
   Log::console(PSTR("AutoLP: wake %s (ret=%d) after %lu ms"), reason_str, ret, sleptMs);
 
-  // Handle spurious wakes: ext1 (SOC IRQ) or ret=259 (wake condition already met)
-  // Both mean we didn't actually sleep - clear IRQs, check button, re-sleep
+  // Handle spurious wakes: ext1 (BOOT button bounce) or ret=259 (wake condition already met)
   int spurious_count = 0;
   const int MAX_SPURIOUS = 5;
   while ((reason == ESP_SLEEP_WAKEUP_EXT1 || ret == ESP_ERR_INVALID_STATE) && spurious_count < MAX_SPURIOUS) {
@@ -379,7 +378,7 @@ void enterPassSleep(uint32_t sleep_secs) {
     Serial.flush();
     esp_sleep_enable_timer_wakeup(1000000ULL * remaining);
     configureRadioWakeup();
-    configurePmuWakeup();  // clears IRQs, skips ext1 if pin still LOW
+    configureButtonWakeup();
     delay(100);
     ret = esp_light_sleep_start();
     reason = esp_sleep_get_wakeup_cause();
@@ -387,7 +386,7 @@ void enterPassSleep(uint32_t sleep_secs) {
     switch (reason) {
       case ESP_SLEEP_WAKEUP_TIMER: r = "timer"; break;
       case ESP_SLEEP_WAKEUP_EXT0:  r = "ext0 (packet)"; break;
-      case ESP_SLEEP_WAKEUP_EXT1:  r = "ext1 (PMU)"; break;
+      case ESP_SLEEP_WAKEUP_EXT1:  r = "ext1 (button)"; break;
       default: break;
     }
     Log::console(PSTR("AutoLP: wake %s (ret=%d)"), r, ret);

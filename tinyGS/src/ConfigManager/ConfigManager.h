@@ -75,7 +75,7 @@ constexpr auto configVersion = "0.05"; //max 4 chars
 #define SUPREME_GNSS_WAKEUP 7
 #define SUPREME_PMU_SDA 42
 #define SUPREME_PMU_SCL 41
-#define SUPREME_PMU_IRQ 16
+#define SUPREME_PMU_IRQ 40
 #define SUPREME_LED 3
 
 // T-Beam V1.0/V1.1 PMU IRQ pin (AXP192, GPIO 35 is input-only on ESP32)

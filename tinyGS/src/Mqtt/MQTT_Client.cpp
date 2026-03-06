@@ -82,7 +82,7 @@ void MQTT_Client::loop()
       Log::console(PSTR("Low power: deep sleep %lu seconds"), (unsigned long)sleep_seconds);
       esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
       configureRadioWakeup();  // ext0 wake on packet
-      configurePmuWakeup();  // ext1 wake on PWR button
+      configureButtonWakeup();  // ext1 wake on BOOT button
       displayTurnOff();
       Power::getInstance().setGnssPower(false);
       // Radio stays in RX for ext0 wakeup
@@ -1110,7 +1110,7 @@ void MQTT_Client::remoteGoToSleep(char *payload, size_t payload_len)
   }
 
   esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
-  configurePmuWakeup();
+  configureButtonWakeup();
   displayTurnOff();
   Power::getInstance().setGnssPower(false);
   // Radio stays in RX for wake-on-packet
@@ -1139,7 +1139,7 @@ void MQTT_Client::remoteGoToSiesta(char *payload, size_t payload_len)
   }
 
   esp_sleep_enable_timer_wakeup(1000000ULL * sleep_seconds);
-  configurePmuWakeup();
+  configureButtonWakeup();
   displayTurnOff();
   Power::getInstance().setGnssPower(false);
   // Radio stays in RX mode for wake-on-packet
@@ -1159,7 +1159,7 @@ void MQTT_Client::remoteGoToSiesta(char *payload, size_t payload_len)
   switch (wakeup_reason) {
     case ESP_SLEEP_WAKEUP_TIMER:    reason = "timer"; break;
     case ESP_SLEEP_WAKEUP_EXT0:     reason = "ext0 (packet)"; break;
-    case ESP_SLEEP_WAKEUP_EXT1:     reason = "ext1"; break;
+    case ESP_SLEEP_WAKEUP_EXT1:     reason = "ext1 (button)"; break;
     case ESP_SLEEP_WAKEUP_TOUCHPAD: reason = "touch"; break;
     case ESP_SLEEP_WAKEUP_ULP:      reason = "ulp"; break;
     default: break;
