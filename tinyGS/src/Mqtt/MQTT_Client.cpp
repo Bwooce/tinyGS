@@ -85,6 +85,7 @@ void MQTT_Client::loop()
       configureButtonWakeup();  // ext1 wake on BOOT button
       displayTurnOff();
       Power::getInstance().setGnssPower(false);
+      Power::getInstance().setWatchdogSleepMode();
       // Radio stays in RX for ext0 wakeup
       delay(100);
       Serial.flush();
@@ -1113,6 +1114,7 @@ void MQTT_Client::remoteGoToSleep(char *payload, size_t payload_len)
   configureButtonWakeup();
   displayTurnOff();
   Power::getInstance().setGnssPower(false);
+  Power::getInstance().setWatchdogSleepMode();
   // Radio stays in RX for wake-on-packet
   delay(100);
   Serial.flush();

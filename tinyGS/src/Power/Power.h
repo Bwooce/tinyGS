@@ -134,6 +134,7 @@
 #define AXP2101_IRQ_STATUS0         0x48
 #define AXP2101_IRQ_STATUS1         0x49
 #define AXP2101_IRQ_STATUS2         0x4A
+#define AXP2101_WDT_CTRL            0x19
 #define AXP2101_TS_PIN_CTRL         0x50
 #define AXP2101_IPRECHG             0x61
 #define AXP2101_ICC                 0x62
@@ -297,6 +298,11 @@ public:
      bool wasPwrButtonPressed();
      int8_t getPmuIrqPin() { return pmuIrqPin; }
      void deepSleepSensors();
+     void enableWatchdog();
+     void disableWatchdog();
+     void feedWatchdog();
+     void setWatchdogSleepMode();   // switch to IRQ-only action for sleep
+     void setWatchdogActiveMode();  // restore full power cycle action
      TwoWire* getPmuWire() { return pmuWire; }
      Power();
 private:

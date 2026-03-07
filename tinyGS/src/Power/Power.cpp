@@ -33,9 +33,11 @@ byte irqstat1;
 byte irqstat2;
 
 static volatile bool pmuIrqFired = false;
+static volatile uint32_t pmuIsrCount = 0;
 
 void IRAM_ATTR Power::pmuIrqHandler() {
     pmuIrqFired = true;
+    pmuIsrCount++;
 }
 
 #define LEGACY_BATT_PIN 36
@@ -235,7 +237,8 @@ void Power::checkAXP()
     regV = regV | 0x06;                   // set bit 1 (Main Battery) and bit 2 (Button battery)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, regV);       // and chargers now enabled
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_V_LIMIT, 0x30);       // set minimum system voltage to 4.4V (default 4.7V)
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x05);       // set input voltage limit to 4.28v
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x09);       // VINDPM 4.60V - throttles charge current before solar panel regulator dropout
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x05);                       // input current limit 2000mA - VINDPM prevents over-draw
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VOFF_SET, 0x06);       // set Vsys for PWROFF threshold to 3.2V
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_TS_PIN_CTRL, 0x14);       // set TS pin to EXTERNAL input (not temperature)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHGLED_SET, 0x01);       // set CHGLED for 'type A' and enable pin function
@@ -245,6 +248,13 @@ void Power::checkAXP()
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE0, 0xCF);  // bat temp, SOC warn levels
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE1, 0xFC);  // VBUS, battery, button short/long press
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE2, 0x77);  // bat OV, charger timer, die OT, chg done, overcurrent
+    // PMU watchdog: 128s timeout, full power cycle on expiry (DCDC/LDO off + PWRON)
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL, 0x37);   // action=3 (bits[5:4]), timeout=7/128s (bits[2:0])
+    { uint8_t reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 | 0x01); } // enable WDT (bit 0)
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL,
+        I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL) | 0x08); // feed WDT (bit 3)
+    Log::console(PSTR("PMU: watchdog enabled (128s, full power cycle)"));
     pmustat1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS1);
     pmustat2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
     pwronsta = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_PWRON_STATUS);
@@ -257,6 +267,10 @@ void Power::checkAXP()
     { char irqDesc[64]; uint8_t irqs[3] = {irqstat0, irqstat1, irqstat2};
       decodeIRQs(2, irqs, irqDesc, sizeof(irqDesc));
       Log::console(PSTR("IRQ status 0,1,2    : %02X,%02X,%02X [%s]"), irqstat0, irqstat1, irqstat2, irqDesc);
+      // Clear IRQ status (write-1-to-clear) so bits don't persist across boots
+      if (irqstat0) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, irqstat0);
+      if (irqstat1) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS1, irqstat1);
+      if (irqstat2) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS2, irqstat2);
     }
     { uint8_t en0 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE0);
       uint8_t en1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_ENABLE1);
@@ -603,16 +617,72 @@ void Power::clearIRQ() {
     }
 }
 
+void Power::enableWatchdog() {
+    if (AXPchip != 2) return;
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL, 0x37);  // 128s, full power cycle
+    uint8_t reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 | 0x01);
+    feedWatchdog();
+    // Verify enable took effect
+    reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
+    if (!(reg18 & 0x01)) {
+        Log::console(PSTR("PMU: watchdog enable FAILED (R18=%02X), retrying"), reg18);
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 | 0x01);
+        feedWatchdog();
+    }
+}
+
+void Power::disableWatchdog() {
+    if (AXPchip != 2) return;
+    uint8_t reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 & ~0x01);
+    // Verify disable took effect
+    reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
+    if (reg18 & 0x01) {
+        Log::console(PSTR("PMU: watchdog disable FAILED (R18=%02X), retrying"), reg18);
+        I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 & ~0x01);
+    }
+}
+
+void Power::feedWatchdog() {
+    if (AXPchip != 2) return;
+    uint8_t val = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL);
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL, val | 0x08);
+}
+
+void Power::setWatchdogSleepMode() {
+    if (AXPchip != 2) return;
+    // Switch to IRQ-only action (bits[5:4]=00) so expiry during sleep is harmless
+    uint8_t val = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL);
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL, (val & 0xCF) | 0x08);  // clear action, feed
+}
+
+void Power::setWatchdogActiveMode() {
+    if (AXPchip != 2) return;
+    // Restore full power cycle action (bits[5:4]=11) and feed
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL, 0x3F);  // action=3, timeout=128s, feed
+}
+
 void Power::checkPmuStatus(bool force) {
     if (AXPchip == 0) return;
+
+    // Feed PMU watchdog every 30s
+    if (AXPchip == 2) {
+        static unsigned long lastWdtFeed = 0;
+        unsigned long now = millis();
+        if (now - lastWdtFeed >= 30000) {
+            lastWdtFeed = now;
+            feedWatchdog();
+        }
+    }
 
     // IRQ-driven: handle PMU interrupts immediately
     // For boards without IRQ pin wired, poll on periodic cadence instead
     // force=true bypasses the IRQ gate (used during sleep wake handling)
     bool checkIrqs = force || pmuIrqFired;
     if (pmuIrqFired) pmuIrqFired = false;
-    if (!checkIrqs && pmuIrqPin < 0) {
-        // Fallback: poll IRQs every 60s on boards without IRQ pin
+    if (!checkIrqs) {
+        // Poll IRQs every 60s as fallback (or diagnostic when ISR pin is set)
         static unsigned long lastIrqPoll = 0;
         unsigned long now = millis();
         if (now - lastIrqPoll >= 60000) {
@@ -677,8 +747,12 @@ void Power::checkPmuStatus(bool force) {
     bool vbus = isVbusPresent();
 
     if (AXPchip == 2) {
-        Log::console(PSTR("Power: %s (%s), %.2fV (%d%%), %.1fC"),
-            vbus ? "USB/Sol" : "Battery", stateStr, vbat/1000.0, pct, temp);
+        uint8_t reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
+        uint8_t status1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS1);
+        uint8_t status2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
+        Log::console(PSTR("Power: %s (%s), %.2fV (%d%%), %.1fC [R18=%02X S1=%02X S2=%02X%s]"),
+            vbus ? "USB/Sol" : "Battery", stateStr, vbat/1000.0, pct, temp,
+            reg18, status1, status2, (status2 & 0x08) ? " VINDPM" : "");
     } else if (AXPchip == 1) {
         float chgCur = getBatteryChargeCurrent();
         float dischgCur = getBatteryDischargeCurrent();
@@ -760,6 +834,11 @@ void Power::clearIRQ() {}
 void Power::decodeIRQs(uint8_t chipType, const uint8_t* irqs, char* desc, size_t descLen) { desc[0] = '\0'; }
 void Power::setGnssPower(bool on) {}
 void Power::deepSleepSensors() {}
+void Power::enableWatchdog() {}
+void Power::disableWatchdog() {}
+void Power::feedWatchdog() {}
+void Power::setWatchdogSleepMode() {}
+void Power::setWatchdogActiveMode() {}
 void Power::I2CwriteByte(uint8_t Address, uint8_t Register, uint8_t Data) {}
 uint8_t Power::I2CreadByte(uint8_t Address, uint8_t Register) { return 0; }
 void Power::I2Cread(uint8_t Address, uint8_t Register, uint8_t Nbytes, uint8_t* Data) {}

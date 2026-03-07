@@ -202,6 +202,7 @@ bool mqttAutoconf () {
         static time_t started_autoconf = millis ();
         if (millis () - started_autoconf > AUTOCONFIG_TIMEOUT) {
             Log::console (PSTR ("Autoconfig timeout, please check your internet connection and restart the board"));
+            Power::getInstance().setWatchdogSleepMode();
             delay (500);
             esp_deep_sleep_start ();
             return false;
@@ -336,6 +337,7 @@ void enterPassSleep(uint32_t sleep_secs) {
 
   displayTurnOff();
   Power::getInstance().setGnssPower(false);
+  Power::getInstance().setWatchdogSleepMode();  // IRQ-only action, safe for any sleep duration
   delay(100);
   Serial.flush();
   WiFi.disconnect(true);
@@ -361,7 +363,7 @@ void enterPassSleep(uint32_t sleep_secs) {
 
   // Handle spurious wakes: ext1 (BOOT button bounce) or ret=259 (wake condition already met)
   int spurious_count = 0;
-  const int MAX_SPURIOUS = 5;
+  const int MAX_SPURIOUS = 3;
   while ((reason == ESP_SLEEP_WAKEUP_EXT1 || ret == ESP_ERR_INVALID_STATE) && spurious_count < MAX_SPURIOUS) {
     spurious_count++;
     // Read, log and clear PMU IRQs (force=true bypasses ISR gate)
@@ -377,8 +379,8 @@ void enterPassSleep(uint32_t sleep_secs) {
     Log::console(PSTR("AutoLP: spurious wake, re-sleeping %lu s"), (unsigned long)remaining);
     Serial.flush();
     esp_sleep_enable_timer_wakeup(1000000ULL * remaining);
-    configureRadioWakeup();
-    configureButtonWakeup();
+    configureRadioWakeup();  // skips ext0 if DIO already HIGH
+    configureButtonWakeup(); // skips ext1 if BOOT reads LOW
     delay(100);
     ret = esp_light_sleep_start();
     reason = esp_sleep_get_wakeup_cause();
@@ -390,10 +392,14 @@ void enterPassSleep(uint32_t sleep_secs) {
       default: break;
     }
     Log::console(PSTR("AutoLP: wake %s (ret=%d)"), r, ret);
+    // If sleep keeps failing immediately, stop trying
+    if (ret == ESP_ERR_INVALID_STATE && (millis() - sleepStartMillis) < 2000)
+      break;
   }
-  if (spurious_count >= MAX_SPURIOUS)
-    Log::console(PSTR("AutoLP: gave up after %d spurious wakes"), spurious_count);
+  if (spurious_count > 0)
+    Log::console(PSTR("AutoLP: %d spurious wake(s)"), spurious_count);
 
+  Power::getInstance().setWatchdogActiveMode();  // restore full power cycle action
   lastWakeMillis = millis();
   lpState = LP_IDLE;
 }
