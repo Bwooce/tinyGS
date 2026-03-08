@@ -752,7 +752,7 @@ void Power::checkPmuStatus(bool force) {
         uint8_t status2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
         Log::console(PSTR("Power: %s (%s), %.2fV (%d%%), %.1fC [R18=%02X S1=%02X S2=%02X%s]"),
             vbus ? "USB/Sol" : "Battery", stateStr, vbat/1000.0, pct, temp,
-            reg18, status1, status2, (status2 & 0x08) ? " VINDPM" : "");
+            reg18, status1, status2, ((status2 & 0x08) && vbus) ? " VINDPM" : "");
     } else if (AXPchip == 1) {
         float chgCur = getBatteryChargeCurrent();
         float dischgCur = getBatteryDischargeCurrent();

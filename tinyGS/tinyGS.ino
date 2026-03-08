@@ -293,12 +293,10 @@ unsigned long lastTleRefresh = millis();
 // autoLowPower state machine
 enum LowPowerState {
   LP_FULL_ACTIVE,
-  LP_IDLE,
-  LP_PASS_SLEEP
+  LP_IDLE
 };
 
 static LowPowerState lpState = LP_FULL_ACTIVE;
-static unsigned long lastWakeMillis = 0;
 static bool lpInitialized = false;
 
 // Check if any low-power trigger is active
@@ -307,101 +305,25 @@ bool isLowPowerActive() {
   return cm.getLowPower() || cm.getAutoLowPower();
 }
 
-// Enter idle low power: modem sleep, peripherals off
+// Enter idle low power: modem sleep, reduced CPU, peripherals off
 void enterIdleLowPower() {
   if (lpState == LP_IDLE) return;
   lpState = LP_IDLE;
-  Log::console(PSTR("AutoLP: entering idle low power"));
+  Log::console(PSTR("AutoLP: entering idle (80MHz, modem sleep)"));
+  setCpuFrequencyMhz(80);
   esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
   Power::getInstance().setGnssPower(false);
   displayTurnOff();
 }
 
-// Exit to full active: modem active, peripherals on
+// Exit to full active: full CPU, modem active, peripherals on
 void enterFullActive() {
   if (lpState == LP_FULL_ACTIVE) return;
   lpState = LP_FULL_ACTIVE;
-  Log::console(PSTR("AutoLP: entering full active"));
+  Log::console(PSTR("AutoLP: entering full active (240MHz)"));
+  setCpuFrequencyMhz(240);
   esp_wifi_set_ps(WIFI_PS_NONE);
   // GNSS and OLED restored by normal loop (displayResetTimeout, etc.)
-}
-
-// Pass sleep: full light sleep with ext0 + timer wake
-void enterPassSleep(uint32_t sleep_secs) {
-  lpState = LP_PASS_SLEEP;
-  Log::console(PSTR("AutoLP: pass sleep %lu s"), (unsigned long)sleep_secs);
-
-  esp_sleep_enable_timer_wakeup(1000000ULL * sleep_secs);
-  configureRadioWakeup();
-  configureButtonWakeup();
-
-  displayTurnOff();
-  Power::getInstance().setGnssPower(false);
-  Power::getInstance().setWatchdogSleepMode();  // IRQ-only action, safe for any sleep duration
-  delay(100);
-  Serial.flush();
-  WiFi.disconnect(true);
-  delay(100);
-
-  unsigned long sleepStartMillis = millis();
-  int ret = esp_light_sleep_start();
-
-  // Waking up - go to idle low power, not full active
-  WiFi.disconnect(false);
-  delay(500);
-
-  esp_sleep_wakeup_cause_t reason = esp_sleep_get_wakeup_cause();
-  const char* reason_str = "unknown";
-  switch (reason) {
-    case ESP_SLEEP_WAKEUP_TIMER:    reason_str = "timer"; break;
-    case ESP_SLEEP_WAKEUP_EXT0:     reason_str = "ext0 (packet)"; break;
-    case ESP_SLEEP_WAKEUP_EXT1:     reason_str = "ext1 (button)"; break;
-    default: break;
-  }
-  unsigned long sleptMs = millis() - sleepStartMillis;
-  Log::console(PSTR("AutoLP: wake %s (ret=%d) after %lu ms"), reason_str, ret, sleptMs);
-
-  // Handle spurious wakes: ext1 (BOOT button bounce) or ret=259 (wake condition already met)
-  int spurious_count = 0;
-  const int MAX_SPURIOUS = 3;
-  while ((reason == ESP_SLEEP_WAKEUP_EXT1 || ret == ESP_ERR_INVALID_STATE) && spurious_count < MAX_SPURIOUS) {
-    spurious_count++;
-    // Read, log and clear PMU IRQs (force=true bypasses ISR gate)
-    Power::getInstance().checkPmuStatus(true);
-    // If it was a real button press, checkPmuStatus sets the flag
-    if (Power::getInstance().wasPwrButtonPressed())
-      break;
-    unsigned long elapsed = millis() - sleepStartMillis;
-    uint32_t elapsed_secs = elapsed / 1000;
-    if (elapsed_secs >= sleep_secs)
-      break;
-    uint32_t remaining = sleep_secs - elapsed_secs;
-    Log::console(PSTR("AutoLP: spurious wake, re-sleeping %lu s"), (unsigned long)remaining);
-    Serial.flush();
-    esp_sleep_enable_timer_wakeup(1000000ULL * remaining);
-    configureRadioWakeup();  // skips ext0 if DIO already HIGH
-    configureButtonWakeup(); // skips ext1 if BOOT reads LOW
-    delay(100);
-    ret = esp_light_sleep_start();
-    reason = esp_sleep_get_wakeup_cause();
-    const char* r = "unknown";
-    switch (reason) {
-      case ESP_SLEEP_WAKEUP_TIMER: r = "timer"; break;
-      case ESP_SLEEP_WAKEUP_EXT0:  r = "ext0 (packet)"; break;
-      case ESP_SLEEP_WAKEUP_EXT1:  r = "ext1 (button)"; break;
-      default: break;
-    }
-    Log::console(PSTR("AutoLP: wake %s (ret=%d)"), r, ret);
-    // If sleep keeps failing immediately, stop trying
-    if (ret == ESP_ERR_INVALID_STATE && (millis() - sleepStartMillis) < 2000)
-      break;
-  }
-  if (spurious_count > 0)
-    Log::console(PSTR("AutoLP: %d spurious wake(s)"), spurious_count);
-
-  Power::getInstance().setWatchdogActiveMode();  // restore full power cycle action
-  lastWakeMillis = millis();
-  lpState = LP_IDLE;
 }
 
 // Main autoLowPower state machine - call from loop()
@@ -423,7 +345,6 @@ void autoLowPowerManager() {
   // First time entering low power
   if (!lpInitialized) {
     lpInitialized = true;
-    lastWakeMillis = millis();
     Log::console(PSTR("AutoLP: enabled"));
   }
 
@@ -434,49 +355,9 @@ void autoLowPowerManager() {
     return;
   }
 
-  // Satellite above horizon with TLE - stay in idle (MQTT alive for data)
-  bool haveTLE = (status.modeminfo.tle[0] != 0);
-  bool satAbove = haveTLE && (status.tle.dSatEL > 0);
-
-  if (satAbove) {
-    if (lpState == LP_FULL_ACTIVE)
-      enterIdleLowPower();
-    return;
-  }
-
-  // In idle low power - check if we can go deeper (pass sleep)
+  // Stay in idle low power - MQTT remains connected, CPU at 80MHz
   if (lpState != LP_IDLE)
     enterIdleLowPower();
-
-  // Need TLE to predict passes for pass sleep
-  if (!haveTLE)
-    return;
-
-  // Minimum awake time after wake from pass sleep (60s for MQTT reconnect)
-  const unsigned long MIN_AWAKE_MS = 60000;
-  if (millis() - lastWakeMillis < MIN_AWAKE_MS)
-    return;
-
-  // Check time until next rise
-  uint32_t secs = secondsUntilNextRise(2);
-  if (secs == 0)
-    return;
-  // If prediction maxed out (2h), sat isn't rising soon - stay in idle
-  if (secs >= 2 * 3600)
-    return;
-
-  uint16_t wakeTimeout = ConfigManager::getInstance().getWakeTimeout();
-  if (secs <= wakeTimeout)
-    return;  // rise within wake timeout, stay in idle
-
-  uint32_t sleep_secs = secs - 120;  // 2-minute early-wake margin
-  const uint32_t MAX_SLEEP_SECS = 60;  // TODO: restore to 30 * 60 after testing
-  if (sleep_secs > MAX_SLEEP_SECS)
-    sleep_secs = MAX_SLEEP_SECS;
-
-  Log::console(PSTR("AutoLP: %s at %.1f deg, next rise in %lu s"),
-               status.modeminfo.satellite, status.tle.dSatEL, (unsigned long)secs);
-  enterPassSleep(sleep_secs);
 }
 
 void loop() {  
