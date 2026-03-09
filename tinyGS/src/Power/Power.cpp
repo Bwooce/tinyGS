@@ -236,9 +236,12 @@ void Power::checkAXP()
     regV = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
     regV = regV | 0x06;                   // set bit 1 (Main Battery) and bit 2 (Button battery)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, regV);       // and chargers now enabled
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_V_LIMIT, 0x00);       // min Vsys 4.1V (below VINDPM 4.36V so charger is the active regulator)
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x03);       // VINDPM 4.12V - testing lower threshold for solar
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x02);                       // input current limit 500mA (default)
+    // REG 0x14 min Vsys DPM bits[6:4]: 0=4.1V, 1=4.2V, 2=4.3V, 3=4.4V, 4=4.5V, 5=4.6V, 6=4.7V(default), 7=4.8V
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_V_LIMIT, 0x00);       // min Vsys 4.1V (below VINDPM so charger is the active regulator)
+    // REG 0x15 VINDPM: 3.88V + N*0.08V. 0=3.88V, 3=4.12V, 6=4.36V(default), 9=4.60V, 15=5.08V
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x03);       // VINDPM 4.12V - lower threshold for solar
+    // REG 0x16 input current limit: 0=100mA, 1=500mA, 2=900mA, 3=1000mA, 4=1500mA(default), 5=2000mA
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x03);                       // input current limit 1000mA
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VOFF_SET, 0x06);       // set Vsys for PWROFF threshold to 3.2V
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_TS_PIN_CTRL, 0x14);       // set TS pin to EXTERNAL input (not temperature)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHGLED_SET, 0x01);       // set CHGLED for 'type A' and enable pin function
