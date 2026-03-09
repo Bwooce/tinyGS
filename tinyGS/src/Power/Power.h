@@ -108,7 +108,7 @@
 #define AXP2101_IC_TYPE             0x03
 #define AXP2101_DATA_BUFFER0        0x04
 #define AXP2101_COMMON_CONFIG       0x10
-#define AXP2101_BAT_V_LIMIT         0x14
+#define AXP2101_MIN_VSYS_CTRL       0x14
 #define AXP2101_VBUS_V_LIMIT        0x15
 #define AXP2101_CHG_GAUGE_WDT_CTRL  0x18
 #define AXP2101_PWRON_STATUS        0x20
