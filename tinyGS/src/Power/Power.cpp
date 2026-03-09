@@ -778,7 +778,7 @@ void Power::checkPmuStatus(bool force) {
         // Remove once charging behaviour is well characterised.
         uint32_t isrSnap = pmuIsrCount;
         pmuIsrCount = 0;
-        float vbusV = getVbusVoltage();
+        float vbusV = vbus ? getVbusVoltage() : 0;  // ADC reads garbage when VBUS floating
         float vsysV = getVsysVoltage();
         int irqPinState = (pmuIrqPin >= 0) ? digitalRead(pmuIrqPin) : -1;
         Log::console(PSTR("Power: %s (%s), Vbat=%.2fV (%d%%), Vbus=%.2fV, Vsys=%.2fV, %.1fC [S2=%02X%s] ISR=%lu PIN=%d"),
