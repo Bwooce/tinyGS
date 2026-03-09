@@ -236,9 +236,9 @@ void Power::checkAXP()
     regV = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
     regV = regV | 0x06;                   // set bit 1 (Main Battery) and bit 2 (Button battery)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, regV);       // and chargers now enabled
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_V_LIMIT, 0x30);       // set minimum system voltage to 4.4V (default 4.7V)
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x09);       // VINDPM 4.60V - throttles charge current before solar panel regulator dropout
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x05);                       // input current limit 2000mA - VINDPM prevents over-draw
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_V_LIMIT, 0x00);       // min Vsys 4.1V (below VINDPM 4.36V so charger is the active regulator)
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x03);       // VINDPM 4.12V - testing lower threshold for solar
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x02);                       // input current limit 500mA (default)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VOFF_SET, 0x06);       // set Vsys for PWROFF threshold to 3.2V
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_TS_PIN_CTRL, 0x14);       // set TS pin to EXTERNAL input (not temperature)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHGLED_SET, 0x01);       // set CHGLED for 'type A' and enable pin function
@@ -695,9 +695,14 @@ void Power::checkPmuStatus(bool force) {
         if (AXPchip == 2) {
             uint8_t irqs[3];
             I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, 3, irqs);
+            // Clear ALL status bits (write-1-to-clear) regardless of enable mask
             if (irqs[0]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, irqs[0]);
             if (irqs[1]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS1, irqs[1]);
             if (irqs[2]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS2, irqs[2]);
+            // Mask to only enabled IRQs -- AXP2101 may set status bits regardless of enable
+            irqs[0] &= 0xCF;  // match IRQ_ENABLE0
+            irqs[1] &= 0xFC;  // match IRQ_ENABLE1
+            irqs[2] &= 0x77;  // match IRQ_ENABLE2
 
             if (irqs[0] || irqs[1] || irqs[2]) {
                 char irqDesc[64];
@@ -713,6 +718,22 @@ void Power::checkPmuStatus(bool force) {
             }
             if (irqs[2] & AXP2101_IRQ2_CHG_DONE) {
                 Log::console(PSTR("PMU: Charge complete"));
+            }
+            // TODO: diagnostic re-read -- detect flags that re-assert immediately after clear.
+            // Useful for monitoring solar VINDPM cycling (rapid V+/V- toggling) and
+            // identifying which IRQ source is holding the pin LOW (edge won't re-fire).
+            // Remove once charging behaviour is well characterised.
+            if (pmuIrqPin >= 0 && digitalRead(pmuIrqPin) == LOW) {
+                uint8_t irqs2[3];
+                I2Cread(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, 3, irqs2);
+                if (irqs2[0] || irqs2[1] || irqs2[2]) {
+                    char irqDesc2[64];
+                    decodeIRQs(2, irqs2, irqDesc2, sizeof(irqDesc2));
+                    Log::console(PSTR("PMU IRQ re-asserted: %02X,%02X,%02X [%s]"), irqs2[0], irqs2[1], irqs2[2], irqDesc2);
+                    if (irqs2[0]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS0, irqs2[0]);
+                    if (irqs2[1]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS1, irqs2[1]);
+                    if (irqs2[2]) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IRQ_STATUS2, irqs2[2]);
+                }
             }
         } else if (AXPchip == 1) {
             uint8_t irqs[3];
@@ -750,9 +771,18 @@ void Power::checkPmuStatus(bool force) {
         uint8_t reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
         uint8_t status1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS1);
         uint8_t status2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
-        Log::console(PSTR("Power: %s (%s), %.2fV (%d%%), %.1fC [R18=%02X S1=%02X S2=%02X%s]"),
-            vbus ? "USB/Sol" : "Battery", stateStr, vbat/1000.0, pct, temp,
-            reg18, status1, status2, ((status2 & 0x08) && vbus) ? " VINDPM" : "");
+        // TODO: ISR count helps detect VINDPM chatter (high count = rapid V+/V- cycling).
+        // Remove once charging behaviour is well characterised.
+        uint32_t isrSnap = pmuIsrCount;
+        pmuIsrCount = 0;
+        float vbusV = getVbusVoltage();
+        float vsysV = getVsysVoltage();
+        int irqPinState = (pmuIrqPin >= 0) ? digitalRead(pmuIrqPin) : -1;
+        Log::console(PSTR("Power: %s (%s), Vbat=%.2fV (%d%%), Vbus=%.2fV, Vsys=%.2fV, %.1fC [S2=%02X%s] ISR=%lu PIN=%d"),
+            vbus ? "USB/Sol" : "Battery", stateStr, vbat/1000.0, pct,
+            vbusV/1000.0, vsysV/1000.0, temp,
+            status2, ((status2 & 0x08) && vbus) ? " VINDPM" : "",
+            (unsigned long)isrSnap, irqPinState);
     } else if (AXPchip == 1) {
         float chgCur = getBatteryChargeCurrent();
         float dischgCur = getBatteryDischargeCurrent();
