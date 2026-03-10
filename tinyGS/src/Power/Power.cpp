@@ -149,7 +149,28 @@ void Power::checkAXP()
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
   if (ChipID == XPOWERS_AXP2101_CHIP_ID) {// 0x4A
     AXPchip = 2;
-    Log::console(PSTR("AXP2101 found"));  // T-Beam V1.2 or Supreme with AXP2101 power controller
+    // Decode chip ID register: bits[7:6]=chip_id_h, bits[5:4]=chip_version, bits[3:0]=chip_id_l
+    { uint8_t ver = (ChipID >> 4) & 0x03;
+      uint8_t icc_default = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC);  // EFUSE default before we overwrite
+      Log::console(PSTR("AXP2101 found (silicon %c, ICC EFUSE=0x%02X)"), 'A' + ver, icc_default);
+    }
+
+    // Toggle charger enable to clear any latched battery safe mode (10mA trickle)
+    { uint8_t reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 & ~0x02);  // disable charger
+      delay(10);
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 | 0x02);   // re-enable charger
+      Log::console(PSTR("PMU: charger toggled (safe mode recovery)"));
+    }
+
+    // Disable unused DCDCs (DC2/DC3/DC4 are M.2 socket, nothing connected)
+    { uint8_t reg80 = I2CreadByte(AXP2101_SLAVE_ADDRESS, 0x80);
+      uint8_t old80 = reg80;
+      reg80 &= ~0x0E;  // clear bits 1-3 (DC2, DC3, DC4), preserve bit 0 (DC1=ESP32)
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x80, reg80);
+      if ((old80 & 0x0E) != 0)
+        Log::console(PSTR("PMU: disabled unused DCDCs (0x80: %02X -> %02X)"), old80, reg80);
+    }
 
 #if CONFIG_IDF_TARGET_ESP32S3
     if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
@@ -187,13 +208,12 @@ void Power::checkAXP()
         }
       }
 
-      // Explicitly disable unused rails (ALDO2, BLDO1/2, DLDO1/2)
-      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL1, 0x00); // Disable BLDO1, BLDO2, DLDO1, DLDO2
-
-      regV = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0);
-      regV &= ~(1 << AXP2101_ALDO2_BIT); // Disable ALDO2
-      regV = regV | (1 << AXP2101_ALDO1_BIT) | (1 << AXP2101_ALDO3_BIT) | (1 << AXP2101_ALDO4_BIT);
-      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0, regV);       // and power channels now enabled
+      // REG 0x91: disable DLDO2 (bit 0)
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL1, 0x00);
+      // REG 0x90: enable ALDO1(0)/ALDO3(2)/ALDO4(3), disable ALDO2(1)/BLDO1(4)/BLDO2(5)/CPUSLDO(6)/DLDO1(7)
+      regV = (1 << AXP2101_ALDO1_BIT) | (1 << AXP2101_ALDO3_BIT) | (1 << AXP2101_ALDO4_BIT);  // 0x0D
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_LDO_ONOFF_CTRL0, regV);
+      Log::console(PSTR("PMU: LDOs enabled=ALDO1,3,4 disabled=ALDO2,BLDO1/2,CPUSLDO,DLDO1/2 (0x90=%02X)"), regV);
     } else
 #endif
     {
@@ -239,9 +259,9 @@ void Power::checkAXP()
     // REG 0x14 min Vsys DPM bits[6:4]: 0=4.1V, 1=4.2V, 2=4.3V, 3=4.4V, 4=4.5V, 5=4.6V, 6=4.7V(default), 7=4.8V
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_MIN_VSYS_CTRL, 0x00);       // min Vsys 4.1V (below VINDPM so charger is the active regulator)
     // REG 0x15 VINDPM: 3.88V + N*0.08V. 0=3.88V, 3=4.12V, 6=4.36V(default), 9=4.60V, 15=5.08V
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x03);       // VINDPM 4.12V - lower threshold for solar
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x06);       // VINDPM 4.36V (160mV above 4.2V CV target)
     // REG 0x16 input current limit: 0=100mA, 1=500mA, 2=900mA, 3=1000mA, 4=1500mA(default), 5=2000mA
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x03);                       // input current limit 1000mA
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x05);                       // input current limit 2000mA
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VOFF_SET, 0x06);       // set Vsys for PWROFF threshold to 3.2V
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_TS_PIN_CTRL, 0x14);       // set TS pin to EXTERNAL input (not temperature)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHGLED_SET, 0x01);       // set CHGLED for 'type A' and enable pin function
@@ -717,7 +737,13 @@ void Power::checkPmuStatus(bool force) {
                 Log::console(PSTR("PMU: PWR button pressed"));
             }
             if (irqs[2] & AXP2101_IRQ2_CHARGER_TIMER) {
-                Log::console(PSTR("PMU WARNING: Charge safety timer expired - check battery pack config"));
+                // Safety timer expired -> PMU enters 10mA trickle (safe mode).
+                // Toggle charger enable to exit safe mode and resume normal charging.
+                uint8_t reg18 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
+                I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 & ~0x02);
+                delay(10);
+                I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, reg18 | 0x02);
+                Log::console(PSTR("PMU WARNING: Charge safety timer expired - charger toggled to exit safe mode"));
             }
             if (irqs[2] & AXP2101_IRQ2_CHG_DONE) {
                 Log::console(PSTR("PMU: Charge complete"));
