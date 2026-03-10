@@ -294,6 +294,8 @@ void Power::checkAXP()
       Log::console(PSTR("PMU readback: R14=0x%02X(%lumV) R15=0x%02X(%lumV) R16=0x%02X R62=0x%02X R64=0x%02X R67=0x%02X"),
           r14, (unsigned long)vsys_mv, r15, (unsigned long)vindpm_mv, r16, r62, r64, r67);
     }
+    // REG 0x14 writable mask is 0x77: bits[6:4] (V1.4 Vsys DPM) and bits[2:0] both writable, bits 7,3 RO.
+    // Writing 0x00 safely sets both fields to minimum regardless of which the hardware uses.
     pmustat1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS1);
     pmustat2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
     pwronsta = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_PWRON_STATUS);
