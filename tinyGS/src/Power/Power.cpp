@@ -152,7 +152,7 @@ void Power::checkAXP()
     // Decode chip ID register: bits[7:6]=chip_id_h, bits[5:4]=chip_version, bits[3:0]=chip_id_l
     { uint8_t ver = (ChipID >> 4) & 0x03;
       uint8_t icc_default = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC);  // EFUSE default before we overwrite
-      Log::console(PSTR("AXP2101 found (silicon %c, ICC EFUSE=0x%02X)"), 'A' + ver, icc_default);
+      Log::console(PSTR("AXP2101 found (REG03=0x%02X, silicon %c, ICC EFUSE=0x%02X)"), ChipID, 'A' + ver, icc_default);
     }
 
     // Toggle charger enable to clear any latched battery safe mode (10mA trickle)
@@ -254,12 +254,15 @@ void Power::checkAXP()
     regV = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL);
     regV = regV | 0x06;                   // set bit 1 (Main Battery) and bit 2 (Button battery)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_GAUGE_WDT_CTRL, regV);       // and chargers now enabled
-    // REG 0x14 min Vsys DPM bits[6:4]: 0=4.1V, 1=4.2V, 2=4.3V, 3=4.4V, 4=4.5V, 5=4.6V, 6=4.7V(default), 7=4.8V
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_MIN_VSYS_CTRL, 0x00);       // min Vsys 4.1V (below VINDPM so charger is the active regulator)
-    // REG 0x15 VINDPM: 3.88V + N*0.08V. 0=3.88V, 3=4.12V, 6=4.36V(default), 9=4.60V, 15=5.08V
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x06);       // VINDPM 4.36V (160mV above 4.2V CV target)
-    // REG 0x16 input current limit: 0=100mA, 1=500mA, 2=900mA, 3=1000mA, 4=1500mA(default), 5=2000mA
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x05);                       // input current limit 2000mA
+    // Power input path configuration (LCSC V1.4 datasheet, SWcharge variant)
+    // Vsys DPM must be below VINDPM so the VINDPM loop is the active regulator.
+    // VINDPM must be above the CV charge target (4.2V) to give the buck charger headroom.
+    // REG 0x14 min Vsys DPM bits[6:4]: 0=4.1V, 1=4.2V .. 6=4.7V(default), 7=4.8V
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_MIN_VSYS_CTRL, 0x00);       // min Vsys 4.1V
+    // REG 0x15 VINDPM bits[3:0]: 3.88V + N*0.08V. 0=3.88V, 3=4.12V, 6=4.36V(default), 9=4.60V, 15=5.08V
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x06);       // VINDPM 4.36V (chip default)
+    // REG 0x16 input current limit bits[2:0]: 0=100mA, 1=500mA, 2=900mA, 3=1000mA, 4=1500mA(default), 5=2000mA
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x05);                       // 2000mA (solar panel + system load)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VOFF_SET, 0x06);       // set Vsys for PWROFF threshold to 3.2V
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_TS_PIN_CTRL, 0x14);       // set TS pin to EXTERNAL input (not temperature)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHGLED_SET, 0x01);       // set CHGLED for 'type A' and enable pin function
@@ -276,6 +279,21 @@ void Power::checkAXP()
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL,
         I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_WDT_CTRL) | 0x08); // feed WDT (bit 3)
     Log::console(PSTR("PMU: watchdog enabled (128s, full power cycle)"));
+    // Readback key charger registers to verify writes took effect.
+    // Register formulas per LCSC V1.4 datasheet (Oct 2022) for SWcharge variant.
+    // R14=min Vsys DPM, R15=VINDPM, R16=input current limit,
+    // R62=ICC charge current, R64=CV voltage target, R67=charge timeout config
+    { uint8_t r14 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_MIN_VSYS_CTRL);
+      uint8_t r15 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT);
+      uint8_t r16 = I2CreadByte(AXP2101_SLAVE_ADDRESS, 0x16);
+      uint8_t r62 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC);
+      uint8_t r64 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CV_VOLT);
+      uint8_t r67 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_TIMEOUT_CTRL);
+      uint16_t vsys_mv = 4100 + ((r14 >> 4) & 0x07) * 100;   // REG 0x14 bits[6:4]: 4.1V + N*0.1V
+      uint16_t vindpm_mv = 3880 + (r15 & 0x0F) * 80;          // REG 0x15 bits[3:0]: 3.88V + N*0.08V
+      Log::console(PSTR("PMU readback: R14=0x%02X(%lumV) R15=0x%02X(%lumV) R16=0x%02X R62=0x%02X R64=0x%02X R67=0x%02X"),
+          r14, (unsigned long)vsys_mv, r15, (unsigned long)vindpm_mv, r16, r62, r64, r67);
+    }
     pmustat1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS1);
     pmustat2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_STATUS2);
     pwronsta = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_PWRON_STATUS);
