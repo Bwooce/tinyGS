@@ -163,13 +163,11 @@ void Power::checkAXP()
       Log::console(PSTR("PMU: charger toggled (safe mode recovery)"));
     }
 
-    // Disable unused DCDCs (DC2/DC3/DC4 are M.2 socket, nothing connected)
+    // Log DCDC and LDO enable state from EFUSE (M.2 socket may use DC2/3/4 for radio module)
     { uint8_t reg80 = I2CreadByte(AXP2101_SLAVE_ADDRESS, 0x80);
-      uint8_t old80 = reg80;
-      reg80 &= ~0x0E;  // clear bits 1-3 (DC2, DC3, DC4), preserve bit 0 (DC1=ESP32)
-      I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x80, reg80);
-      if ((old80 & 0x0E) != 0)
-        Log::console(PSTR("PMU: disabled unused DCDCs (0x80: %02X -> %02X)"), old80, reg80);
+      uint8_t reg90 = I2CreadByte(AXP2101_SLAVE_ADDRESS, 0x90);
+      uint8_t reg91 = I2CreadByte(AXP2101_SLAVE_ADDRESS, 0x91);
+      Log::console(PSTR("PMU EFUSE: DCDC=0x%02X LDO0=0x%02X LDO1=0x%02X"), reg80, reg90, reg91);
     }
 
 #if CONFIG_IDF_TARGET_ESP32S3
