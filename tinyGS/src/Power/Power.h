@@ -162,7 +162,10 @@
 #define AXP2101_ALDO2_VOLT          0x93
 #define AXP2101_ALDO3_VOLT          0x94
 #define AXP2101_ALDO4_VOLT          0x95
+#define AXP2101_BAT_PARAMS          0xA1
+#define AXP2101_FUEL_GAUGE_CTRL     0xA2
 #define AXP2101_FUEL_GAUGE          0xA4
+#define AXP2101_RESET_FUEL_GAUGE    0x17
 // Registers 0xA5/0xA6 are undocumented, not in XPowersLib -- removed
 
 // AXP2101 Bitmasks and Shifts
@@ -304,8 +307,12 @@ public:
      void setWatchdogSleepMode();   // switch to IRQ-only action for sleep
      void setWatchdogActiveMode();  // restore full power cycle action
      TwoWire* getPmuWire() { return pmuWire; }
+     void gaugeRestoreFromNVS();
+     void gaugeSaveToNVS();
      Power();
 private:
+    void gaugeReadBROM(uint8_t* buf);
+    void gaugeWriteBROM(const uint8_t* buf);
     void I2CwriteByte(uint8_t Address, uint8_t Register, uint8_t Data);
     uint8_t I2CreadByte(uint8_t Address, uint8_t Register);
     void I2Cread(uint8_t Address, uint8_t Register, uint8_t Nbytes, uint8_t* Data);

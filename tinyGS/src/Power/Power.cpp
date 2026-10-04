@@ -20,6 +20,7 @@
 
 #include "Power.h"
 #include "../Logger/Logger.h"
+#include <Preferences.h>
 
 #if defined(ESP32)
 
@@ -123,7 +124,7 @@ void Power::checkAXP()
         case 3:
           I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_CHARGE1, 0xCB); // 4.2V, 1000mA
           I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_CHARGE2, 0xC3); // precharge 60m, CC timeout 10h
-          Log::console(PSTR("PMU: Battery 3P config - 1000mA charge, 10h/60m timeouts"));
+          Log::console(PSTR("PMU: Battery 3P config - ICC 1000mA, 10h/60m timeouts"));
           break;
         default: // 1P
           I2CwriteByte(AXP192_SLAVE_ADDRESS, AXP192_BAT_CHG_DIG_VOL, 0xC3); // 4.2V, 360mA, 10% termination
@@ -170,6 +171,24 @@ void Power::checkAXP()
       Log::console(PSTR("PMU EFUSE: DCDC=0x%02X LDO0=0x%02X LDO1=0x%02X"), reg80, reg90, reg91);
     }
 
+    // Enable fuel gauge BROM access and set UPDATE_MARK so gauge uses loaded parameters
+    // Per XPowersLib/Allwinner driver: bit0=bromup_en (BROM access), bit4=UPDATE_MARK (params loaded)
+    // The gauge MCU learns battery characteristics autonomously over charge/discharge cycles.
+    // Learned data is in the gauge MCU's internal SRAM (not readable via I2C FIFO).
+    { uint8_t regA2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL);
+      // Read BROM header for logging (toggle bit0 to reset FIFO pointer)
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL, regA2 & ~0x01);
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL, (regA2 & ~0x01) | 0x01);
+      uint8_t hdr0 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_PARAMS);
+      uint8_t hdr1 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_PARAMS);
+      // Enable BROM access + set UPDATE_MARK (bit4=1, bit0=1)
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL, (regA2 | 0x11));
+      Log::console(PSTR("Fuel gauge: BROM[0:1]=%02X%02X, REG_A2=0x%02X->0x%02X"),
+          hdr0, hdr1, regA2, I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL));
+      // Restore learned gauge data from NVS if available
+      gaugeRestoreFromNVS();
+    }
+
 #if CONFIG_IDF_TARGET_ESP32S3
     if (boardIdx == LILYGO_TBEAM_SUPREME || boardIdx == TTGO_TBEAM_SX1262) {
       // T-Beam Supreme
@@ -189,19 +208,19 @@ void Power::checkAXP()
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IPRECHG, 0x06);               // precharge 150mA
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC_CHG_SET, 0x0E); // charge current 800mA
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_TIMEOUT_CTRL, 0xF6); // slow_DPM, 20h CC, 60m pre
-            Log::console(PSTR("PMU: Battery 2P config - 800mA charge, 20h/60m timeouts"));
+            Log::console(PSTR("PMU: Battery 2P config - ICC 800mA, 20h/60m timeouts"));
             break;
           case 3:
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IPRECHG, 0x07);               // precharge 175mA
-            I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC_CHG_SET, 0x10); // charge current 1000mA
+            I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC_CHG_SET, 0x14); // charge current 1400mA (SWcharge max @4.2V CV)
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_TIMEOUT_CTRL, 0xF7); // slow_DPM, 20h CC, 70m pre
-            Log::console(PSTR("PMU: Battery 3P config - 1000mA charge, 20h/70m timeouts"));
+            Log::console(PSTR("PMU: Battery 3P config - ICC 1400mA, 20h/70m timeouts"));
             break;
           default: // 1P
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IPRECHG, 0x05);               // precharge 125mA
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC_CHG_SET, 0x0A); // charge current 400mA
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_TIMEOUT_CTRL, 0xE5); // slow_DPM, 12h CC, 50m pre
-            Log::console(PSTR("PMU: Battery 1P config - 400mA charge, 12h/50m timeouts"));
+            Log::console(PSTR("PMU: Battery 1P config - ICC 400mA, 12h/50m timeouts"));
             break;
         }
       }
@@ -230,19 +249,19 @@ void Power::checkAXP()
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IPRECHG, 0x06);               // precharge 150mA
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC_CHG_SET, 0x0E); // charge current 800mA
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_TIMEOUT_CTRL, 0xF6); // slow_DPM, 20h CC, 60m pre
-            Log::console(PSTR("PMU: Battery 2P config - 800mA charge, 20h/60m timeouts"));
+            Log::console(PSTR("PMU: Battery 2P config - ICC 800mA, 20h/60m timeouts"));
             break;
           case 3:
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IPRECHG, 0x07);               // precharge 175mA
-            I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC_CHG_SET, 0x10); // charge current 1000mA
+            I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC_CHG_SET, 0x14); // charge current 1400mA (SWcharge max @4.2V CV)
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_TIMEOUT_CTRL, 0xF7); // slow_DPM, 20h CC, 70m pre
-            Log::console(PSTR("PMU: Battery 3P config - 1000mA charge, 20h/70m timeouts"));
+            Log::console(PSTR("PMU: Battery 3P config - ICC 1400mA, 20h/70m timeouts"));
             break;
           default: // 1P
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_IPRECHG, 0x05);               // precharge 125mA
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ICC_CHG_SET, 0x0A); // charge current 400mA
             I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_TIMEOUT_CTRL, 0xE5); // slow_DPM, 12h CC, 50m pre
-            Log::console(PSTR("PMU: Battery 1P config - 400mA charge, 12h/50m timeouts"));
+            Log::console(PSTR("PMU: Battery 1P config - ICC 400mA, 12h/50m timeouts"));
             break;
         }
       }
@@ -259,11 +278,32 @@ void Power::checkAXP()
     // VINDPM must be above the CV charge target (4.2V) to give the buck charger headroom.
     // REG 0x14 min Vsys DPM bits[6:4]: 0=4.1V, 1=4.2V .. 6=4.7V(default), 7=4.8V
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_MIN_VSYS_CTRL, 0x00);       // min Vsys 4.1V
-    // REG 0x15 VINDPM bits[3:0]: 3.88V + N*0.08V. 0=3.88V, 3=4.12V, 6=4.36V(default), 9=4.60V, 15=5.08V
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, 0x06);       // VINDPM 4.36V (chip default)
-    // REG 0x16 input current limit bits[2:0]: 0=100mA, 1=500mA, 2=900mA, 3=1000mA, 4=1500mA(default), 5=2000mA
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, 0x05);                       // 2000mA (solar panel + system load)
-    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VOFF_SET, 0x06);       // set Vsys for PWROFF threshold to 3.2V
+    // REG 0x15 VINDPM bits[3:0]: 3.88V + N*0.08V. Configurable via advancedConfig "vindpm" (mV)
+    { uint16_t vindpm_mv = ConfigManager::getInstance().getVindpm();
+      uint8_t vindpm_reg = (vindpm_mv - 3880) / 80;
+      if (vindpm_reg > 15) vindpm_reg = 15;
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VBUS_V_LIMIT, vindpm_reg);
+    }
+    // REG 0x16 input current limit bits[2:0]. Configurable via advancedConfig "inputCurrent" (mA)
+    { uint16_t ilim = ConfigManager::getInstance().getInputCurrent();
+      uint8_t ilim_reg;
+      if (ilim <= 100) ilim_reg = 0;
+      else if (ilim <= 500) ilim_reg = 1;
+      else if (ilim <= 900) ilim_reg = 2;
+      else if (ilim <= 1000) ilim_reg = 3;
+      else if (ilim <= 1500) ilim_reg = 4;
+      else ilim_reg = 5;
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, 0x16, ilim_reg);
+    }
+    // HACK: disable charge termination to prevent "Done" state which unloads the panel.
+    // Without this, high-voltage solar panels float VBUS above 7V OVP when charge completes.
+    // The charger stays in CV mode indefinitely, keeping the panel loaded and VBUS in spec.
+    // Remove this when an external buck converter or OVP IC is fitted.
+    { uint8_t r63 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_ITERM);
+      I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_ITERM, r63 & ~0x10);  // bit4=0: disable termination
+      Log::console(PSTR("PMU: charge termination disabled (OVP workaround)"));
+    }
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_VOFF_SET, 0x03);       // set Vsys for PWROFF threshold to 2.9V (headroom for load pulses)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_TS_PIN_CTRL, 0x14);       // set TS pin to EXTERNAL input (not temperature)
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHGLED_SET, 0x01);       // set CHGLED for 'type A' and enable pin function
     I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_PEK_SET, 0x00);       // set IRQLevel/OFFLevel/ONLevel to minimum (1S/4S/128mS)
@@ -291,8 +331,13 @@ void Power::checkAXP()
       uint8_t r67 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_CHG_TIMEOUT_CTRL);
       uint16_t vsys_mv = 4100 + ((r14 >> 4) & 0x07) * 100;   // REG 0x14 bits[6:4]: 4.1V + N*0.1V
       uint16_t vindpm_mv = 3880 + (r15 & 0x0F) * 80;          // REG 0x15 bits[3:0]: 3.88V + N*0.08V
-      Log::console(PSTR("PMU readback: R14=0x%02X(%lumV) R15=0x%02X(%lumV) R16=0x%02X R62=0x%02X R64=0x%02X R67=0x%02X"),
-          r14, (unsigned long)vsys_mv, r15, (unsigned long)vindpm_mv, r16, r62, r64, r67);
+      // REG 0x16 bits[2:0]: input current limit lookup
+      static const uint16_t ilim[] = {100, 500, 900, 1000, 1500, 2000, 2000, 2000};
+      uint16_t ilim_ma = ilim[r16 & 0x07];
+      // Decode ICC from register: 0-8 = N*25mA, 9+ = 200+(N-8)*100mA
+      uint16_t icc_ma = (r62 <= 8) ? r62 * 25 : 200 + (r62 - 8) * 100;
+      Log::console(PSTR("PMU readback: Vsys=%lumV VINDPM=%lumV Iin=%lumA ICC=%lumA CV=0x%02X TMO=0x%02X"),
+          (unsigned long)vsys_mv, (unsigned long)vindpm_mv, (unsigned long)ilim_ma, (unsigned long)icc_ma, r64, r67);
     }
     // REG 0x14 writable mask is 0x77: bits[6:4] (V1.4 Vsys DPM) and bits[2:0] both writable, bits 7,3 RO.
     // Writing 0x00 safely sets both fields to minimum regardless of which the hardware uses.
@@ -765,6 +810,7 @@ void Power::checkPmuStatus(bool force) {
             }
             if (irqs[2] & AXP2101_IRQ2_CHG_DONE) {
                 Log::console(PSTR("PMU: Charge complete"));
+                gaugeSaveToNVS();  // persist any learned gauge data after full charge
             }
             // TODO: diagnostic re-read -- detect flags that re-assert immediately after clear.
             // Useful for monitoring solar VINDPM cycling (rapid V+/V- toggling) and
@@ -830,6 +876,7 @@ void Power::checkPmuStatus(bool force) {
             vbusV/1000.0, vsysV/1000.0, temp,
             status2, ((status2 & 0x08) && vbus) ? " VINDPM" : "",
             (unsigned long)isrSnap, irqPinState);
+        gaugeSaveToNVS();  // persist BROM if gauge has learned anything new
     } else if (AXPchip == 1) {
         float chgCur = getBatteryChargeCurrent();
         float dischgCur = getBatteryDischargeCurrent();
@@ -885,6 +932,76 @@ bool Power::wasPwrButtonPressed() {
     return pressed;
 }
 
+
+// Fuel gauge BROM NVS persistence (AXP2101 only)
+// Uses "pmu" namespace in NVS partition -- separate from IotWebConf's namespace
+
+void Power::gaugeReadBROM(uint8_t* buf) {
+    // Toggle bit0 to reset FIFO pointer, then read 128 bytes
+    uint8_t regA2 = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL);
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL, regA2 & ~0x01);
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL, (regA2 & ~0x01) | 0x01);
+    for (int i = 0; i < 128; i++) buf[i] = I2CreadByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_PARAMS);
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL, regA2);
+}
+
+void Power::gaugeWriteBROM(const uint8_t* buf) {
+    // Clear UPDATE_MARK, enable BROM write
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL, 0x01);
+    for (int i = 0; i < 128; i++) I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_BAT_PARAMS, buf[i]);
+    // Set UPDATE_MARK + BROM access
+    I2CwriteByte(AXP2101_SLAVE_ADDRESS, AXP2101_FUEL_GAUGE_CTRL, 0x11);
+}
+
+void Power::gaugeRestoreFromNVS() {
+    if (AXPchip != XPOWERS_AXP2101_CHIP_ID) return;
+    Preferences prefs;
+    if (!prefs.begin("pmu", true)) return;  // read-only
+    size_t len = prefs.getBytesLength("gauge");
+    if (len != 128) { prefs.end(); return; }
+    uint8_t saved[128];
+    prefs.getBytes("gauge", saved, 128);
+    prefs.end();
+    // Verify saved data has valid SWcharge header (0x4DA7)
+    if (saved[0] != 0x4D || saved[1] != 0xA7) return;
+    // Read current BROM to check if write needed
+    uint8_t current[128];
+    gaugeReadBROM(current);
+    bool differs = false;
+    for (int i = 0; i < 128; i++) { if (current[i] != saved[i]) { differs = true; break; } }
+    if (differs) {
+        gaugeWriteBROM(saved);
+        Log::console(PSTR("Fuel gauge: restored learned BROM from NVS"));
+    } else {
+        Log::console(PSTR("Fuel gauge: NVS data matches BROM"));
+    }
+}
+
+void Power::gaugeSaveToNVS() {
+    if (AXPchip != XPOWERS_AXP2101_CHIP_ID) return;
+    uint8_t brom[128];
+    gaugeReadBROM(brom);
+    // Only save if header matches SWcharge variant
+    if (brom[0] != 0x4D || brom[1] != 0xA7) return;
+    // Check if BROM differs from what's in NVS
+    Preferences prefs;
+    if (!prefs.begin("pmu", true)) return;
+    uint8_t saved[128] = {0};
+    size_t len = prefs.getBytesLength("gauge");
+    if (len == 128) prefs.getBytes("gauge", saved, 128);
+    prefs.end();
+    bool differs = (len != 128);
+    if (!differs) {
+        for (int i = 0; i < 128; i++) { if (brom[i] != saved[i]) { differs = true; break; } }
+    }
+    if (differs) {
+        if (prefs.begin("pmu", false)) {  // read-write
+            prefs.putBytes("gauge", brom, 128);
+            prefs.end();
+            Log::console(PSTR("Fuel gauge: saved BROM to NVS"));
+        }
+    }
+}
 
 #else // Non-ESP32 (ESP8266) dummy implementations
 

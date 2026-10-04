@@ -1009,6 +1009,28 @@ void ConfigManager::parseAdvancedConf()
   {
     advancedConf.wakeTimeout = doc["wakeTimeout"];
   }
+
+  if (doc.containsKey(F("inputCurrent")))
+  {
+    uint16_t ic = doc["inputCurrent"];
+    // Clamp to valid AXP2101 input current limit values
+    if (ic <= 100) ic = 100;
+    else if (ic <= 500) ic = 500;
+    else if (ic <= 900) ic = 900;
+    else if (ic <= 1000) ic = 1000;
+    else if (ic <= 1500) ic = 1500;
+    else ic = 2000;
+    advancedConf.inputCurrent = ic;
+  }
+
+  if (doc.containsKey(F("vindpm")))
+  {
+    uint16_t v = doc["vindpm"];
+    // Clamp to AXP2101 VINDPM range: 3880-5080mV, step 80mV
+    if (v < 3880) v = 3880;
+    if (v > 5080) v = 5080;
+    advancedConf.vindpm = v;
+  }
 }
 
 void ConfigManager::parseModemStartup()

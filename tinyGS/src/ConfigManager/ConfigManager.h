@@ -167,6 +167,8 @@ typedef struct
   bool lowPower = false;
   bool autoLowPower = false;
   uint16_t wakeTimeout = 300;  // seconds, shared with display timeout
+  uint16_t inputCurrent = 500; // mA, VBUS input current limit (100/500/900/1000/1500/2000)
+  uint16_t vindpm = 4440;      // mV, VINDPM threshold (3880-5080, step 80)
 } AdvancedConfig;
 
 class ConfigManager : public IotWebConf2
@@ -264,6 +266,8 @@ public:
   bool getLowPower() { return advancedConf.lowPower; }
   bool getAutoLowPower() { return advancedConf.autoLowPower; }
   uint16_t getWakeTimeout() { return advancedConf.wakeTimeout; }
+  uint16_t getInputCurrent() { return advancedConf.inputCurrent; }
+  uint16_t getVindpm() { return advancedConf.vindpm; }
   bool getBoardConfig(board_t &board)
   {
     bool ret = true;
